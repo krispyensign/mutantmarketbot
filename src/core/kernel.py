@@ -110,6 +110,8 @@ def kernel(
     """
     if not include_incomplete:
         df = df.iloc[:-1].copy()
+    else:
+        df = df.copy()
 
     # calculate the ATR for the trailing stop loss
     heikin_ashi(df)
