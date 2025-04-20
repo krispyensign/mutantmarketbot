@@ -33,7 +33,7 @@ def report(
             "timestamp",
             "signal",
             "trigger",
-            # "atr",
+            "atr",
             "wma",
             signal_buy_column,
             signal_exit_column,

@@ -9,7 +9,7 @@ from core.calc import (
     entry_price,
     exit_total,
     take_profit,
-    # atr,
+    atr,
     stop_loss as sl,
 )
 
@@ -113,7 +113,7 @@ def kernel(
 
     # calculate the ATR for the trailing stop loss
     heikin_ashi(df)
-    # atr(df, config.wma_period)
+    atr(df, config.wma_period)
 
     # signal using the close prices
     # signal and trigger interval could appears as this:

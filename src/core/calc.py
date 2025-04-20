@@ -62,7 +62,7 @@ def take_profit(df: pd.DataFrame, take_profit: float) -> None:
     is then re-calculated.
 
     """
-    df["take_profit"] = take_profit
+    df["take_profit"] = take_profit * df["atr"]
     df.loc[
         (df["position_value"] > df["take_profit"]) & (df["trigger"] != 1), "signal"
     ] = 0
@@ -96,8 +96,8 @@ def stop_loss(df: pd.DataFrame, stop_loss: float) -> None:
     is then re-calculated.
 
     """
-    df["stop_loss"] = stop_loss
-    df.loc[df["position_value"] < df["stop_loss"], "signal"] = 0
+    df["stop_loss"] = stop_loss * df["atr"]
+    df.loc[(df["position_value"] < df["stop_loss"]) & (df["trigger"] != 1), "signal"] = 0
     df["trigger"] = df["signal"].diff().fillna(0).astype(int)
 
 
