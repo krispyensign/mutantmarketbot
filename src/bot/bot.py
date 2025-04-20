@@ -64,7 +64,7 @@ def bot_run(
     )
     df = kernel(
         df,
-        include_incomplete=False,
+        include_incomplete=trade_id != -1,
         config=kernel_conf,
     )
     rec = Record(

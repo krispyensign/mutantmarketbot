@@ -152,7 +152,8 @@ def backtest(chart_config: ChartConfig, token: str) -> SignalConfig | None:
             take_profit_multiplier,
             stop_loss_multiplier,
         ) in alive_it(column_pairs, total=column_pair_len):
-            if stop_loss_multiplier > take_profit_multiplier:
+            # since we are taking the edge only open is deterministic
+            if 'open' not in signal_exit_column_name:
                 continue
 
             kernel_conf = KernelConfig(
@@ -186,7 +187,7 @@ def backtest(chart_config: ChartConfig, token: str) -> SignalConfig | None:
                 min_exit_total=df["min_exit_total"].iloc[-1],
             )
 
-            if rec.losses - 1 > rec.wins:
+            if rec.wins == 0:
                 continue
             else:
                 total_found += 1
