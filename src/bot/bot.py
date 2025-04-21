@@ -43,13 +43,14 @@ def bot_run(
     except Exception as err:
         return -1, last_time, err
     
-    recent_last_time = df.index[-1]
+    # recent_last_time is the timestamp of the last candle, which is the index
+    recent_last_time = df.iloc[-1]["timestamp"]
+
+    logger.info("%s %s", last_time, recent_last_time)
     is_after_hours = (datetime.isoweekday == FRIDAY and datetime.now().hour >= FIVE_PM) or (
         datetime.isoweekday == SUNDAY and datetime.now().hour < FIVE_PM)
     if last_time == recent_last_time and not is_after_hours:
-        logger.warning("bot_run: last_time == recent_last_time")
-        sleep(1)
-        return trade_id, recent_last_time, None
+        return trade_id, recent_last_time, Exception("last_time == recent_last_time")
     elif last_time == recent_last_time and is_after_hours:
         logger.info("bot_run: last_time == recent_last_time and is_after_hours")
 
@@ -94,10 +95,10 @@ def bot_run(
 
     if rec.trigger == 0 and rec.signal == 0 and trade_id != -1:
         close_order(ctx, trade_id)
-        report(df, signal_conf.signal_buy_column, signal_conf.signal_exit_column)
+        report(df, chart_conf.instrument, signal_conf.signal_buy_column, signal_conf.signal_exit_column)
 
     # print the results
-    report(df, signal_conf.signal_buy_column, signal_conf.signal_exit_column)
+    report(df, chart_conf.instrument, signal_conf.signal_buy_column, signal_conf.signal_exit_column)
 
     return trade_id, recent_last_time, None
 
@@ -145,7 +146,7 @@ def bot(
             )
             if err is not None:
                 logger.error(err)
-                sleep(5)
+                sleep(2)
                 continue
 
         logger.info(f"columns used: {signal_conf}")

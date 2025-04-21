@@ -156,6 +156,9 @@ def backtest(chart_config: ChartConfig, token: str) -> SignalConfig | None:
             if 'open' not in signal_exit_column_name:
                 continue
 
+            if stop_loss_multiplier > take_profit_multiplier:
+                continue
+
             kernel_conf = KernelConfig(
                 signal_buy_column=signal_buy_column_name,
                 signal_exit_column=signal_exit_column_name,
@@ -222,7 +225,7 @@ def backtest(chart_config: ChartConfig, token: str) -> SignalConfig | None:
         best_max_conf,
         best_rec,
     )
-    report(best_df, best_max_conf.signal_buy_column, best_max_conf.signal_exit_column)
+    report(best_df, chart_config.instrument, best_max_conf.signal_buy_column, best_max_conf.signal_exit_column)
 
     logger.debug(
         "not worst found %s %s",
@@ -231,6 +234,7 @@ def backtest(chart_config: ChartConfig, token: str) -> SignalConfig | None:
     )
     report(
         not_worst_df,
+        chart_config.instrument,
         not_worst_conf.signal_buy_column,
         not_worst_conf.signal_exit_column,
     )
