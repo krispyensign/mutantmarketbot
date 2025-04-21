@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 import logging
 from time import sleep
+import uuid
 import v20  # type: ignore
 
 from bot.backtest import ChartConfig, PerfTimer, Record, SignalConfig
@@ -22,7 +23,8 @@ APP_START_TIME = datetime.now()
 FRIDAY = 5
 SUNDAY = 7
 FIVE_PM = 21
-
+BOT_ID = uuid.uuid4()
+HALF_MINUTE = 30
 
 @dataclass
 class TradeConfig:
@@ -32,28 +34,29 @@ class TradeConfig:
 
 
 def bot_run(
-    ctx: OandaContext, signal_conf: SignalConfig, chart_conf: ChartConfig, amount: float, last_time: datetime
-) -> tuple[int, datetime, Exception | None]:
+    ctx: OandaContext, signal_conf: SignalConfig, chart_conf: ChartConfig, amount: float
+) -> tuple[int, Exception | None]:
     """Run the bot."""
     try:
-        trade_id = get_open_trade(ctx)
+        trade_id = get_open_trade(ctx, BOT_ID)
         df = getOandaOHLC(
             ctx, count=chart_conf.candle_count, granularity=chart_conf.granularity
         )
     except Exception as err:
-        return -1, last_time, err
+        return -1, err
     
-    # recent_last_time is the timestamp of the last candle, which is the index
-    recent_last_time = df.iloc[-1]["timestamp"]
+    recent_last_time = datetime.fromisoformat(df.iloc[-1]["timestamp"])
+    current_time = datetime.now(tz=recent_last_time.tzinfo).replace(second=0, microsecond=0)
+    if current_time.minute % 5 != 0:
+        return trade_id, None 
 
-    logger.info("%s %s", last_time, recent_last_time)
+    logger.info("%s ** %s", current_time, recent_last_time)
     is_after_hours = (datetime.isoweekday == FRIDAY and datetime.now().hour >= FIVE_PM) or (
         datetime.isoweekday == SUNDAY and datetime.now().hour < FIVE_PM)
-    if last_time == recent_last_time and not is_after_hours:
-        return trade_id, recent_last_time, Exception("last_time == recent_last_time")
-    elif last_time == recent_last_time and is_after_hours:
-        logger.info("bot_run: last_time == recent_last_time and is_after_hours")
-
+    if is_after_hours:
+        logger.info("is_after_hours")
+    elif (current_time - recent_last_time).total_seconds() > HALF_MINUTE:
+        return trade_id, Exception("bad range for last_time")
 
     kernel_conf = KernelConfig(
         signal_buy_column=signal_conf.signal_buy_column,
@@ -82,16 +85,17 @@ def bot_run(
             trade_id = place_order(
                 ctx,
                 amount,
+                BOT_ID,
             )
 
         except Exception as err:
-            return -1, recent_last_time, err
+            return -1, err
 
     if rec.trigger == -1 and trade_id != -1:
         try:
             close_order(ctx, trade_id)
         except Exception as err:
-            return trade_id, recent_last_time, err
+            return trade_id, err
 
     if rec.trigger == 0 and rec.signal == 0 and trade_id != -1:
         close_order(ctx, trade_id)
@@ -100,7 +104,7 @@ def bot_run(
     # print the results
     report(df, chart_conf.instrument, signal_conf.signal_buy_column, signal_conf.signal_exit_column)
 
-    return trade_id, recent_last_time, None
+    return trade_id, None
 
 
 def bot(
@@ -141,8 +145,8 @@ def bot(
     last_time = datetime.now()
     while True:
         with PerfTimer(APP_START_TIME, logger):
-            trade_id, last_time, err = bot_run(
-                ctx, signal_conf, chart_conf=chart_conf, amount=trade_conf.amount, last_time=last_time,
+            trade_id, err = bot_run(
+                ctx, signal_conf, chart_conf=chart_conf, amount=trade_conf.amount, 
             )
             if err is not None:
                 logger.error(err)

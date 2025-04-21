@@ -1,5 +1,6 @@
 """Get OHLC data from an exchange and convert it into a pandas DataFrame."""
 
+import uuid
 import v20  # type: ignore
 import pandas as pd
 import logging
@@ -130,6 +131,7 @@ def getOandaOHLC(
 def place_order(
     ctx: OandaContext,
     amount: float,
+    id: uuid.UUID,
     take_profit: float = 0.0,
     trailing_distance: float = 0.0,
 ) -> int:
@@ -139,10 +141,10 @@ def place_order(
     ----------
     ctx : OandaContext
         The Oanda API context.
-    instrument : str
-        The instrument to place the order on.
     amount : float
         The amount of the instrument to buy or sell.
+    id : uuid.UUID
+        The UUID of the app.
     take_profit : float
         The take profit price for the order.
     trailing_distance : float
@@ -159,9 +161,14 @@ def place_order(
     if ctx.instrument.split("_")[1] == "JPY":
         decimals = 3
 
+    client_extensions = v20.transaction.ClientExtensions(
+        id=str(id),
+        tag="mutant"
+    )
     order: v20.order.MarketOrder = v20.order.MarketOrder(
         instrument=ctx.instrument,
         units=amount,
+        clientExtensions=client_extensions,
     )
     if take_profit > 0.0:
         takeProfitOnFill = v20.transaction.TakeProfitDetails(
@@ -204,82 +211,6 @@ def place_order(
     return trade_id
 
 
-def replace_order(
-    ctx: OandaContext,
-    trade_id: int,
-    amount: float,
-    take_profit: float = 0.0,
-    trailing_distance: float = 0.0,
-) -> int:
-    """Replace an order on the Oanda API.
-
-    Parameters
-    ----------
-    ctx : OandaContext
-        The Oanda API context.
-    trade_id : int
-        The trade ID of the order to replace.
-    amount : float
-        The amount of the instrument to buy or sell.
-    take_profit : float
-        The take profit price for the order.
-    trailing_distance : float
-        The trailing distance for the order.
-
-    Returns
-    -------
-    int
-        The order ID of the replaced order.
-
-    """
-    # place the order
-    decimals = 5
-    if ctx.instrument.split("_")[1] == "JPY":
-        decimals = 3
-
-    order: v20.order.MarketOrder = v20.order.MarketOrder(
-        instrument=ctx.instrument,
-        units=amount,
-    )
-
-    if take_profit > 0.0:
-        takeProfitOnFill = v20.transaction.TakeProfitDetails(
-            price=f"{round(take_profit, decimals)}"
-        )
-        order.takeProfitOnFill = takeProfitOnFill
-    if trailing_distance > 0.0:
-        trailingStopLossOnFill = v20.transaction.TrailingStopLossDetails(
-            distance=f"{round(trailing_distance, decimals)}"
-        )
-        order.trailingStopLossOnFill = trailingStopLossOnFill
-    resp: v20.response.Response = ctx.ctx.order.replace(
-        ctx.account_id,
-        orderSpecifier=trade_id,
-        order=order,
-    )
-
-    if resp.body is None:
-        raise Exception("No response body")
-
-    # get the trade id from the response body and return it if it exists
-    if resp.body is not None and "orderFillTransaction" in resp.body:
-        result: v20.transaction.OrderFillTransaction = resp.body["orderFillTransaction"]
-        trade: v20.trade.TradeOpen = result.tradeOpened
-        trade_id = trade.tradeID
-    else:
-        if resp.body is not None and "orderRejectTransaction" in resp.body:
-            reject_result: v20.transaction.MarketOrderRejectTransaction = resp.body[
-                "orderRejectTransaction"
-            ]
-            logger.error(reject_result.summary())
-            logger.error(reject_result.json())
-            raise Exception(reject_result.reason)
-
-        raise Exception(resp.body.__str__())
-
-    return trade_id
-
-
 def close_order(ctx: OandaContext, trade_id: int) -> None:
     """Close an order on the Oanda API.
 
@@ -298,18 +229,20 @@ def close_order(ctx: OandaContext, trade_id: int) -> None:
             raise Exception(resp.body.to_json())
 
 
-def get_open_trade(ctx: OandaContext) -> int:
+def get_open_trade(ctx: OandaContext, id: uuid.UUID) -> int:
     """Get the first open trade.
 
     Parameters
     ----------
     ctx : OandaContext
         The Oanda API context.
+    id : uuid.UUID
+        The UUID of the app.
 
     Returns
     -------
     int
-        The trade ID of the first open trade.
+        The trade ID of the first open trade for the app.
 
     """
     resp = ctx.ctx.trade.list_open(ctx.account_id)
@@ -318,6 +251,8 @@ def get_open_trade(ctx: OandaContext) -> int:
         if "trades" in resp.body:
             trades = resp.body["trades"]
             if len(trades) > 0:
-                return trades[0].id
+                for t in trades:
+                    if t.clientExtensions.id == id:
+                        return t.id
 
     return -1
