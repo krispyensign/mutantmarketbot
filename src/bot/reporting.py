@@ -33,7 +33,6 @@ def report(
     """
     df_ticks = df.reset_index()[
         [
-            "timestamp",
             "signal",
             "trigger",
             "atr",
@@ -46,13 +45,13 @@ def report(
             "exit_value",
             "running_total",
             "exit_total",
+            "timestamp",
         ]
     ]
     df_ticks["timestamp"] = pd.to_datetime(df_ticks["timestamp"])
     df_ticks["completed_datetime"] = (
         (timedelta(minutes=5) + df_ticks["timestamp"]).dt
     ).strftime("%Y-%m-%d %H:%M:%S")
-    df_ticks.drop("timestamp", axis=1, inplace=True)
     df_orders = df_ticks.copy()
     df_orders = df_orders[df_orders["trigger"] != 0]
     round_amount = 3 if 'JPY' in instrument else 5

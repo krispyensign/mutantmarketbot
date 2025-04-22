@@ -11,7 +11,7 @@ from bot.backtest import ChartConfig, PerfTimer, Record, SignalConfig
 from core.kernel import KernelConfig, kernel
 from bot.reporting import report
 from bot.exchange import (
-    close_order,
+    close_trade,
     get_open_trade,
     getOandaOHLC,
     place_order,
@@ -56,6 +56,10 @@ def bot_run(
     if is_after_hours:
         logger.info("is_after_hours")
     elif (current_time - recent_last_time).total_seconds() > HALF_MINUTE:
+        logger.warning("\n" + 
+            df.tail(4)
+            .round(5)
+            .to_string(index=False, header=True, justify="left"))
         return trade_id, Exception("bad range for last_time")
 
     kernel_conf = KernelConfig(
@@ -68,16 +72,17 @@ def bot_run(
     )
     df = kernel(
         df,
-        include_incomplete=trade_id != -1,
+        include_incomplete=True,
         config=kernel_conf,
     )
+    frame = df.iloc[-1] if trade_id != -1 else df.iloc[-2]
     rec = Record(
-        signal=df["signal"].iloc[-1],
-        trigger=df["trigger"].iloc[-1],
-        losses=df["losses"].iloc[-1],
-        wins=df["wins"].iloc[-1],
-        exit_total=df["exit_total"].iloc[-1],
-        min_exit_total=df["min_exit_total"].iloc[-1],
+        signal=frame["signal"],
+        trigger=frame["trigger"],
+        losses=frame["losses"],
+        wins=frame["wins"],
+        exit_total=frame["exit_total"],
+        min_exit_total=frame["min_exit_total"],
     )
 
     if rec.trigger == 1 and trade_id == -1:
@@ -93,13 +98,12 @@ def bot_run(
 
     if rec.trigger == -1 and trade_id != -1:
         try:
-            close_order(ctx, trade_id)
+            close_trade(ctx, trade_id)
         except Exception as err:
             return trade_id, err
 
     if rec.trigger == 0 and rec.signal == 0 and trade_id != -1:
-        close_order(ctx, trade_id)
-        report(df, chart_conf.instrument, signal_conf.signal_buy_column, signal_conf.signal_exit_column)
+        close_trade(ctx, trade_id)
 
     # print the results
     report(df, chart_conf.instrument, signal_conf.signal_buy_column, signal_conf.signal_exit_column)
@@ -153,7 +157,8 @@ def bot(
                 continue
 
         logger.info(f"columns used: {signal_conf}")
-        logger.info(f"trade id: {trade_id}") if trade_id == -1 else None
+        logger.info(f"trade id: {trade_id}")
+        logger.info(f"run complete. {trade_conf.bot_id}")
         sleep_until_next_5_minute(trade_id=trade_id)
 
 

@@ -182,38 +182,32 @@ def place_order(
             distance=f"{round(trailing_distance, decimals)}"
         )
         order.trailingStopLossOnFill = trailingStopLossOnFill
+    logger.info("request: \n" + order.json())
 
-    logger.info(order.json())
     resp: v20.response.Response = ctx.ctx.order.create(
         ctx.account_id,
         order=order,
     )
-
     if resp.body is None:
         raise Exception("No response body")
+    logger.info("resp: \n" + resp.raw_body)
 
     # get the trade id from the response body and return it if it exists
     trade_id: int
-    if resp.body is not None and "orderFillTransaction" in resp.body:
+    if "orderFillTransaction" in resp.body:
         result: v20.transaction.OrderFillTransaction = resp.body["orderFillTransaction"]
         trade: v20.trade.TradeOpen = result.tradeOpened
         trade_id = trade.tradeID
+    elif "errorMessage" in resp.body:
+        raise Exception(resp.body["errorCode"] +":" + resp.body["errorMessage"])
     else:
-        if resp.body is not None and "orderRejectTransaction" in resp.body:
-            reject_result: v20.transaction.MarketOrderRejectTransaction = resp.body[
-                "orderRejectTransaction"
-            ]
-            logger.error(reject_result.summary())
-            logger.error(reject_result.json())
-            raise Exception(reject_result.reason)
-
-        raise Exception(resp.body.__str__())
+        raise Exception("unhandled response")
 
     return trade_id
 
 
-def close_order(ctx: OandaContext, trade_id: int) -> None:
-    """Close an order on the Oanda API.
+def close_trade(ctx: OandaContext, trade_id: int) -> None:
+    """Close an open trade on the Oanda API.
 
     Parameters
     ----------
@@ -224,10 +218,14 @@ def close_order(ctx: OandaContext, trade_id: int) -> None:
 
     """
     resp = ctx.ctx.trade.close(ctx.account_id, trade_id)
-
-    if resp.body is not None:
-        if "orderRejectTransaction" in resp.body:
-            raise Exception(resp.body.to_json())
+    if resp.body is None:
+        raise Exception("No response body")
+    logger.info(resp.raw_body)
+    
+    if "errorMessage" in resp.body:
+        raise Exception(resp.body["errorCode"] +":" + resp.body["errorMessage"])
+    else:
+        raise Exception("unhandled response")
 
 
 def get_open_trade(ctx: OandaContext, id: uuid.UUID) -> int:
@@ -247,13 +245,21 @@ def get_open_trade(ctx: OandaContext, id: uuid.UUID) -> int:
 
     """
     resp = ctx.ctx.trade.list_open(ctx.account_id)
+    if resp.body is None:
+        raise Exception("No response body")
+    logger.info(resp.raw_body)
+
     trades: list[v20.trade.Trade] = []
-    if resp.body is not None:
-        if "trades" in resp.body:
-            trades = resp.body["trades"]
-            if len(trades) > 0:
-                for t in trades:
-                    if t.clientExtensions.id == str(id):
-                        return t.id
+    if "trades" in resp.body:
+        trades = resp.body["trades"]
+        if len(trades) == 0:
+            return -1
+        for t in trades:
+            if t.clientExtensions.id == str(id):
+                return t.id
+    elif "errorMessage" in resp.body:
+        raise Exception(resp.body["errorCode"] +":" + resp.body["errorMessage"])
+    else:
+        raise Exception("unhandled response")
 
     return -1
