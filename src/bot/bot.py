@@ -23,7 +23,6 @@ APP_START_TIME = datetime.now()
 FRIDAY = 5
 SUNDAY = 7
 FIVE_PM = 21
-BOT_ID = uuid.uuid4()
 HALF_MINUTE = 30
 
 @dataclass
@@ -31,14 +30,15 @@ class TradeConfig:
     """Configuration for the bot."""
 
     amount: float
+    bot_id: uuid.UUID
 
 
 def bot_run(
-    ctx: OandaContext, signal_conf: SignalConfig, chart_conf: ChartConfig, amount: float
+    ctx: OandaContext, signal_conf: SignalConfig, chart_conf: ChartConfig, trade_conf: TradeConfig
 ) -> tuple[int, Exception | None]:
     """Run the bot."""
     try:
-        trade_id = get_open_trade(ctx, BOT_ID)
+        trade_id = get_open_trade(ctx, trade_conf.bot_id)
         df = getOandaOHLC(
             ctx, count=chart_conf.candle_count, granularity=chart_conf.granularity
         )
@@ -84,8 +84,8 @@ def bot_run(
         try:
             trade_id = place_order(
                 ctx,
-                amount,
-                BOT_ID,
+                trade_conf.amount,
+                trade_conf.bot_id,
             )
 
         except Exception as err:
@@ -145,7 +145,7 @@ def bot(
     while True:
         with PerfTimer(APP_START_TIME, logger):
             trade_id, err = bot_run(
-                ctx, signal_conf, chart_conf=chart_conf, amount=trade_conf.amount, 
+                ctx, signal_conf, chart_conf=chart_conf, trade_conf=trade_conf, 
             )
             if err is not None:
                 logger.error(err)

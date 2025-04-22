@@ -1,5 +1,6 @@
 trade_config:
   amount: 1000
+  bot_id: d573285a-28d3-46e6-81ac-02d23888314a
 
 chart_config:
   instrument: EUR_USD

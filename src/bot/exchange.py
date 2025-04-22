@@ -253,7 +253,7 @@ def get_open_trade(ctx: OandaContext, id: uuid.UUID) -> int:
             trades = resp.body["trades"]
             if len(trades) > 0:
                 for t in trades:
-                    if t.clientExtensions.id == id:
+                    if t.clientExtensions.id == str(id):
                         return t.id
 
     return -1
