@@ -142,7 +142,6 @@ def bot(
         instrument=chart_conf.instrument,
     )
 
-    last_time = datetime.now()
     while True:
         with PerfTimer(APP_START_TIME, logger):
             trade_id, err = bot_run(

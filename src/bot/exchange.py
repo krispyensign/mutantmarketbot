@@ -169,6 +169,7 @@ def place_order(
         instrument=ctx.instrument,
         units=amount,
         clientExtensions=client_extensions,
+        tradeClientExtensions=client_extensions,
     )
     if take_profit > 0.0:
         takeProfitOnFill = v20.transaction.TakeProfitDetails(
