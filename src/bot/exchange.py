@@ -176,8 +176,7 @@ def place_order(
     )
     if take_profit > 0.0:
         takeProfitOnFill = v20.transaction.TakeProfitDetails(
-            price=f"{round(take_profit, decimals)}",
-            clientExtensions=client_extensions,
+            price=f"{round(take_profit, decimals)}"
         )
         order.takeProfitOnFill = takeProfitOnFill
 

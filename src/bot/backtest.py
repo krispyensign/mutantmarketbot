@@ -65,24 +65,6 @@ class SignalConfig:
 
 
 @dataclass
-class Record:
-    """Record class."""
-
-    signal: int
-    trigger: int
-    losses: int
-    wins: int
-    exit_total: float
-    min_exit_total: float
-    atr: float
-    entry_price: float
-
-    def __str__(self) -> str:
-        """Return a string representation of the Record object."""
-        return f"w:{self.wins} l:{self.losses}, q:{round(self.exit_total, 5)}, q_min:{round(self.min_exit_total, 5)}"
-
-
-@dataclass
 class ChartConfig:
     """ChartConfig class."""
 

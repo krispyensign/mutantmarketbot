@@ -72,7 +72,6 @@ def bot_run(
     )
 
     # check if the current time is a 5 minute interval
-    rec = df.iloc[-1]
     if trade_id == -1 and current_time.minute % 5 != 0:
         return trade_id, df, None
 
@@ -81,7 +80,8 @@ def bot_run(
         return trade_id, df, Exception(f"curr:{current_time} last:{recent_last_time}")
 
     # place order
-    elif rec.trigger == 1 and trade_id == -1:
+    rec = df.iloc[-1]
+    if rec.trigger == 1 and trade_id == -1:
         try:
             trade_id = place_order(
                 ctx,
