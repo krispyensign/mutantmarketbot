@@ -5,7 +5,7 @@ import numpy as np
 import talib
 
 ASK_COLUMN = "ask_close"
-BID_COLUMN = "bid_open"
+BID_COLUMN = "bid_high"
 
 
 def exit_total(df: pd.DataFrame) -> None:

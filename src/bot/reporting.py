@@ -8,7 +8,7 @@ import logging
 logger = logging.getLogger("reporting")
 
 ENTRY_COLUMN = "ask_close"
-EXIT_COLUMN = "bid_open"
+EXIT_COLUMN = "bid_high"
 
 
 def report(

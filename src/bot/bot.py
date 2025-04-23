@@ -62,10 +62,6 @@ def bot_run(
 
     # check if the current time is greater than the recent last time
     if (current_time - recent_last_time).total_seconds() > HALF_MINUTE:
-        logger.warning(
-            "\n"
-            + df.tail(4).round(5).to_string(index=False, header=True, justify="left")
-        )
         return trade_id, df, Exception(f"curr:{current_time} last:{recent_last_time}")
 
     # place order

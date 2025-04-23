@@ -1,5 +1,5 @@
 chart_config:
-  instrument: AUD_CHF
+  instrument: EUR_USD
   granularity: M5
   wma_period: 20
   candle_count: 288

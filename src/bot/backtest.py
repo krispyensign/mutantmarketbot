@@ -77,7 +77,7 @@ class Record:
 
     def __str__(self) -> str:
         """Return a string representation of the Record object."""
-        return f"w:{self.wins} l:{self.losses}, q:{round(self.exit_total, 5)}, q_min:{round(self.min_exit_total, 5)}"
+        return f"w:{self.wins} l:{self.losses}, tp:{round(self.take_profit, 5)}, q:{round(self.exit_total, 5)}, q_min:{round(self.min_exit_total, 5)}"
 
 
 @dataclass
@@ -154,7 +154,7 @@ def backtest(chart_config: ChartConfig, token: str) -> SignalConfig | None:
             stop_loss_multiplier,
         ) in alive_it(column_pairs, total=column_pair_len):
             # since we are taking the edge only open is deterministic
-            if "open" not in signal_exit_column_name:
+            if "close" not in signal_exit_column_name:
                 continue
 
             if stop_loss_multiplier > take_profit_multiplier:
