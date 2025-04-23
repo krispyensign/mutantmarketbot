@@ -54,7 +54,7 @@ def report(
     ).strftime("%Y-%m-%d %H:%M:%S")
     df_orders = df_ticks.copy()
     df_orders = df_orders[df_orders["trigger"] != 0]
-    round_amount = 3 if 'JPY' in instrument else 5
+    round_amount = 3 if "JPY" in instrument else 5
     logger.info("recent trades")
     logger.info(
         "\n"
@@ -65,5 +65,7 @@ def report(
     logger.debug("current status")
     logger.debug(
         "\n"
-        + df_ticks.tail(6).round(round_amount).to_string(index=False, header=True, justify="left")
+        + df_ticks.tail(6)
+        .round(round_amount)
+        .to_string(index=False, header=True, justify="left")
     )

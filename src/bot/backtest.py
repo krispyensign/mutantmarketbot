@@ -73,6 +73,7 @@ class Record:
     wins: int
     exit_total: float
     min_exit_total: float
+    take_profit: float
 
     def __str__(self) -> str:
         """Return a string representation of the Record object."""
@@ -129,8 +130,8 @@ def backtest(chart_config: ChartConfig, token: str) -> SignalConfig | None:
     not_worst_conf = SignalConfig("", "", "", 0.0, 0.0)
     best_df = pd.DataFrame()
     not_worst_df = pd.DataFrame()
-    best_rec = Record(0, 0, 0, 0, -99.0, -99.0)
-    not_worst_rec = Record(0, 0, 0, 0, -99.0, -99.0)
+    best_rec = Record(0, 0, 0, 0, -99.0, -99.0, 0.0)
+    not_worst_rec = Record(0, 0, 0, 0, -99.0, -99.0, 0.0)
 
     column_pairs = itertools.product(
         SOURCE_COLUMNS, SOURCE_COLUMNS, SOURCE_COLUMNS, TP, SL
@@ -153,7 +154,7 @@ def backtest(chart_config: ChartConfig, token: str) -> SignalConfig | None:
             stop_loss_multiplier,
         ) in alive_it(column_pairs, total=column_pair_len):
             # since we are taking the edge only open is deterministic
-            if 'open' not in signal_exit_column_name:
+            if "open" not in signal_exit_column_name:
                 continue
 
             if stop_loss_multiplier > take_profit_multiplier:
@@ -188,6 +189,7 @@ def backtest(chart_config: ChartConfig, token: str) -> SignalConfig | None:
                 wins=df["wins"].iloc[-1],
                 exit_total=df["exit_total"].iloc[-1],
                 min_exit_total=df["min_exit_total"].iloc[-1],
+                take_profit=df["take_profit"].iloc[-1] + df["entry_price"].iloc[-1],
             )
 
             if rec.wins == 0:
@@ -225,7 +227,12 @@ def backtest(chart_config: ChartConfig, token: str) -> SignalConfig | None:
         best_max_conf,
         best_rec,
     )
-    report(best_df, chart_config.instrument, best_max_conf.signal_buy_column, best_max_conf.signal_exit_column)
+    report(
+        best_df,
+        chart_config.instrument,
+        best_max_conf.signal_buy_column,
+        best_max_conf.signal_exit_column,
+    )
 
     logger.debug(
         "not worst found %s %s",

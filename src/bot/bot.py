@@ -6,6 +6,7 @@ import logging
 from time import sleep
 import uuid
 import v20  # type: ignore
+import pandas as pd
 
 from bot.backtest import ChartConfig, PerfTimer, Record, SignalConfig
 from core.kernel import KernelConfig, kernel
@@ -25,6 +26,7 @@ SUNDAY = 7
 FIVE_PM = 21
 HALF_MINUTE = 30
 
+
 @dataclass
 class TradeConfig:
     """Configuration for the bot."""
@@ -34,34 +36,75 @@ class TradeConfig:
 
 
 def bot_run(
-    ctx: OandaContext, signal_conf: SignalConfig, chart_conf: ChartConfig, trade_conf: TradeConfig
-) -> tuple[int, Exception | None]:
+    ctx: OandaContext,
+    signal_conf: SignalConfig,
+    chart_conf: ChartConfig,
+    trade_conf: TradeConfig,
+) -> tuple[int, pd.DataFrame | None, Exception | None]:
     """Run the bot."""
+    # get open trades and candles
     try:
         trade_id = get_open_trade(ctx, trade_conf.bot_id)
         df = getOandaOHLC(
             ctx, count=chart_conf.candle_count, granularity=chart_conf.granularity
         )
     except Exception as err:
-        return -1, err
-    
+        return -1, None, err
+
+    # run kernel on candles
     recent_last_time = datetime.fromisoformat(df.iloc[-1]["timestamp"])
-    current_time = datetime.now(tz=recent_last_time.tzinfo).replace(second=0, microsecond=0)
-    if current_time.minute % 5 != 0:
-        return trade_id, None 
+    df, rec = run_kernel(df, signal_conf, chart_conf)
 
-    logger.info("%s ** %s", current_time, recent_last_time)
-    is_after_hours = (datetime.isoweekday == FRIDAY and datetime.now().hour >= FIVE_PM) or (
-        datetime.isoweekday == SUNDAY and datetime.now().hour < FIVE_PM)
-    if is_after_hours:
-        logger.info("is_after_hours")
-    elif (current_time - recent_last_time).total_seconds() > HALF_MINUTE:
-        logger.warning("\n" + 
-            df.tail(4)
-            .round(5)
-            .to_string(index=False, header=True, justify="left"))
-        return trade_id, Exception("bad range for last_time")
+    # get the current time
+    current_time = datetime.now(tz=recent_last_time.tzinfo).replace(
+        second=0, microsecond=0
+    )
 
+    # check if the current time is greater than the recent last time
+    if (current_time - recent_last_time).total_seconds() > HALF_MINUTE:
+        logger.warning(
+            "\n"
+            + df.tail(4).round(5).to_string(index=False, header=True, justify="left")
+        )
+        return trade_id, df, Exception(f"curr:{current_time} last:{recent_last_time}")
+
+    # place order
+    elif rec.trigger == 1 and trade_id == -1:
+        try:
+            trade_id = place_order(
+                ctx,
+                trade_conf.amount,
+                trade_conf.bot_id,
+                take_profit=rec.take_profit,
+            )
+        except Exception as err:
+            return trade_id, df, err
+    elif rec.signal == 1 and trade_id != -1:
+        try:
+            close_trade(ctx, trade_id)
+            trade_id = place_order(
+                ctx,
+                trade_conf.amount,
+                trade_conf.bot_id,
+                take_profit=rec.take_profit,
+            )
+        except Exception as err:
+            return trade_id, df, err
+
+    # close order
+    elif (rec.trigger == -1 and trade_id != -1) or (
+        rec.trigger == 0 and rec.signal == 0 and trade_id != -1
+    ):
+        try:
+            close_trade(ctx, trade_id)
+        except Exception as err:
+            return trade_id, df, err
+
+    return trade_id, df, None
+
+
+def run_kernel(df: pd.DataFrame, signal_conf: SignalConfig, chart_conf: ChartConfig):
+    """Run the kernel on the dataframe."""
     kernel_conf = KernelConfig(
         signal_buy_column=signal_conf.signal_buy_column,
         signal_exit_column=signal_conf.signal_exit_column,
@@ -72,10 +115,10 @@ def bot_run(
     )
     df = kernel(
         df,
-        include_incomplete=True,
+        include_incomplete=False,
         config=kernel_conf,
     )
-    frame = df.iloc[-1] if trade_id != -1 else df.iloc[-2]
+    frame = df.iloc[-1]
     rec = Record(
         signal=frame["signal"],
         trigger=frame["trigger"],
@@ -83,32 +126,10 @@ def bot_run(
         wins=frame["wins"],
         exit_total=frame["exit_total"],
         min_exit_total=frame["min_exit_total"],
+        take_profit=frame["take_profit"] + frame["entry_price"],
     )
 
-    if rec.trigger == 1 and trade_id == -1:
-        try:
-            trade_id = place_order(
-                ctx,
-                trade_conf.amount,
-                trade_conf.bot_id,
-            )
-
-        except Exception as err:
-            return -1, err
-
-    if rec.trigger == -1 and trade_id != -1:
-        try:
-            close_trade(ctx, trade_id)
-        except Exception as err:
-            return trade_id, err
-
-    if rec.trigger == 0 and rec.signal == 0 and trade_id != -1:
-        close_trade(ctx, trade_id)
-
-    # print the results
-    report(df, chart_conf.instrument, signal_conf.signal_buy_column, signal_conf.signal_exit_column)
-
-    return trade_id, None
+    return df, rec
 
 
 def bot(
@@ -139,6 +160,7 @@ def bot(
     """
     logger.info("starting bot.")
 
+    # create Oanda context
     ctx = OandaContext(
         ctx=v20.Context("api-fxpractice.oanda.com", token=token),
         account_id=account_id,
@@ -146,19 +168,40 @@ def bot(
         instrument=chart_conf.instrument,
     )
 
+    # wait until next 5 minute
+    sleep_until_next_5_minute(trade_id=-1)
+
+    # run bot
+    trade_id: int = -1
+    df: pd.DataFrame | None = None
+    err: Exception | None = None
     while True:
         with PerfTimer(APP_START_TIME, logger):
-            trade_id, err = bot_run(
-                ctx, signal_conf, chart_conf=chart_conf, trade_conf=trade_conf, 
+            trade_id, df, err = bot_run(
+                ctx,
+                signal_conf,
+                chart_conf=chart_conf,
+                trade_conf=trade_conf,
             )
-            if err is not None:
-                logger.error(err)
-                sleep(2)
-                continue
+
+        if err is not None:
+            logger.error(err)
+            sleep(2)
+            continue
 
         logger.info(f"columns used: {signal_conf}")
         logger.info(f"trade id: {trade_id}")
         logger.info(f"run complete. {trade_conf.bot_id}")
+
+        # print the results
+        if df is not None:
+            report(
+                df,
+                chart_conf.instrument,
+                signal_conf.signal_buy_column,
+                signal_conf.signal_exit_column,
+            )
+
         sleep_until_next_5_minute(trade_id=trade_id)
 
 

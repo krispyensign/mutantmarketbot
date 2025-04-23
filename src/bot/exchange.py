@@ -6,6 +6,7 @@ import pandas as pd
 import logging
 
 logger = logging.getLogger("exchange")
+OK = 200
 
 
 class OandaContext:
@@ -104,6 +105,12 @@ def getOandaOHLC(
         price="MAB",
         count=count,
     )
+    IsOK(resp)
+
+    if "candles" not in resp.body:
+        logger.error(resp.raw_body)
+        raise Exception("No candles in response body")
+
     if resp.body["candles"]:
         candles: v20.instrument.Candlesticks = resp.body["candles"]
         candle: v20.instrument.Candlestick
@@ -161,10 +168,7 @@ def place_order(
     if ctx.instrument.split("_")[1] == "JPY":
         decimals = 3
 
-    client_extensions = v20.transaction.ClientExtensions(
-        id=str(id),
-        tag="mutant"
-    )
+    client_extensions = v20.transaction.ClientExtensions(id=str(id), tag="mutant")
     order: v20.order.MarketOrder = v20.order.MarketOrder(
         instrument=ctx.instrument,
         units=amount,
@@ -182,15 +186,15 @@ def place_order(
             distance=f"{round(trailing_distance, decimals)}"
         )
         order.trailingStopLossOnFill = trailingStopLossOnFill
-    logger.info("request: \n" + order.json())
+    logger.info(order.json())
 
     resp: v20.response.Response = ctx.ctx.order.create(
         ctx.account_id,
         order=order,
     )
-    if resp.body is None:
-        raise Exception("No response body")
-    logger.info("resp: \n" + resp.raw_body)
+    logger.info(resp.raw_body)
+
+    IsOK(resp)
 
     # get the trade id from the response body and return it if it exists
     trade_id: int
@@ -198,12 +202,21 @@ def place_order(
         result: v20.transaction.OrderFillTransaction = resp.body["orderFillTransaction"]
         trade: v20.trade.TradeOpen = result.tradeOpened
         trade_id = trade.tradeID
-    elif "errorMessage" in resp.body:
-        raise Exception(resp.body["errorCode"] +":" + resp.body["errorMessage"])
     else:
         raise Exception("unhandled response")
 
     return trade_id
+
+
+def IsOK(resp):
+    """Check if the response is OK."""
+    if resp.body is None:
+        raise Exception("No response body")
+    if resp.status != OK:
+        if "errorMessage" in resp.body:
+            raise Exception(resp.body["errorCode"] + ":" + resp.body["errorMessage"])
+        else:
+            raise Exception("unhandled response")
 
 
 def close_trade(ctx: OandaContext, trade_id: int) -> None:
@@ -217,15 +230,12 @@ def close_trade(ctx: OandaContext, trade_id: int) -> None:
         The trade ID of the order to close.
 
     """
-    resp = ctx.ctx.trade.close(ctx.account_id, trade_id)
+    resp: v20.response.Response = ctx.ctx.trade.close(ctx.account_id, trade_id)
     if resp.body is None:
         raise Exception("No response body")
     logger.info(resp.raw_body)
-    
-    if "errorMessage" in resp.body:
-        raise Exception(resp.body["errorCode"] +":" + resp.body["errorMessage"])
-    else:
-        raise Exception("unhandled response")
+
+    IsOK(resp)
 
 
 def get_open_trade(ctx: OandaContext, id: uuid.UUID) -> int:
@@ -257,9 +267,7 @@ def get_open_trade(ctx: OandaContext, id: uuid.UUID) -> int:
         for t in trades:
             if t.clientExtensions.id == str(id):
                 return t.id
-    elif "errorMessage" in resp.body:
-        raise Exception(resp.body["errorCode"] +":" + resp.body["errorMessage"])
-    else:
-        raise Exception("unhandled response")
+
+    IsOK(resp)
 
     return -1
