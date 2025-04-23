@@ -6,7 +6,7 @@ import pandas as pd
 import logging
 
 logger = logging.getLogger("exchange")
-OK = 200
+OK = [200, 201]
 
 
 class OandaContext:
@@ -211,7 +211,7 @@ def IsOK(resp):
     """Check if the response is OK."""
     if resp.body is None:
         raise Exception("No response body")
-    if resp.status != OK:
+    if resp.status not in OK:
         if "errorMessage" in resp.body:
             raise Exception(resp.body["errorCode"] + ":" + resp.body["errorMessage"])
         else:

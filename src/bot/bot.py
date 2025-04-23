@@ -76,7 +76,7 @@ def bot_run(
         return trade_id, df, None
 
     # check if the current time is greater than the recent last time
-    if (current_time - recent_last_time).total_seconds() > HALF_MINUTE:
+    if (current_time - recent_last_time).total_seconds() > 300:
         return trade_id, df, Exception(f"curr:{current_time} last:{recent_last_time}")
 
     # place order
