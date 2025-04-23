@@ -52,6 +52,7 @@ def bot_run(
         return -1, None, err
 
     # run kernel on candles
+    recent_last_time = datetime.fromisoformat(df.iloc[-1]["timestamp"])
     df = kernel(
         df,
         include_incomplete=False,
@@ -66,7 +67,6 @@ def bot_run(
     )
 
     # get the current time
-    recent_last_time = datetime.fromisoformat(df.iloc[-1]["timestamp"])
     current_time = datetime.now(tz=recent_last_time.tzinfo).replace(
         second=0, microsecond=0
     )
@@ -76,7 +76,7 @@ def bot_run(
         return trade_id, df, None
 
     # check if the current time is greater than the recent last time
-    if (current_time - recent_last_time).total_seconds() > HALF_MINUTE:
+    if (current_time - recent_last_time).total_seconds() > 300:
         return trade_id, df, Exception(f"curr:{current_time} last:{recent_last_time}")
 
     # place order
@@ -87,7 +87,6 @@ def bot_run(
                 ctx,
                 trade_conf.amount,
                 trade_conf.bot_id,
-                take_profit=rec.atr * signal_conf.take_profit + rec.entry_price,
             )
         except Exception as err:
             return trade_id, df, err

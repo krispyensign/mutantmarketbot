@@ -14,6 +14,7 @@ logging.root.handlers = []
 TOKEN = os.environ.get("OANDA_TOKEN")
 ACCOUNT_ID = os.environ.get("OANDA_ACCOUNT_ID")
 
+
 def get_logger(file_name: str):
     """Get logger for main module."""
     logging.basicConfig(
@@ -52,7 +53,7 @@ if __name__ == "__main__":
             sys.exit(1)
     elif "bot" in sys.argv[1]:
         logger = get_logger("bot.log")
-        conf = yaml.safe_load(open(sys.argv[4]))
+        conf = yaml.safe_load(open(sys.argv[2]))
         chart_conf = ChartConfig(**conf["chart_config"])
         signal_conf = SignalConfig(**conf["signal_config"])
         trade_conf = TradeConfig(**conf["trade_config"])
