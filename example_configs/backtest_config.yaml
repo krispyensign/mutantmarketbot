@@ -1,5 +1,4 @@
 chart_config:
-  instrument: EUR_USD
   granularity: M5
   wma_period: 20
-  candle_count: 5000
+  candle_count: 288

@@ -1,0 +1,16 @@
+trade_config:
+  amount: 1000
+  bot_id: 5fbbd2b4-f47a-4d2a-bedf-c1329db8a69e
+
+chart_config:
+  instrument: AUD_CHF
+  granularity: M5
+  wma_period: 20
+  candle_count: 288
+
+signal_config:
+  source_column: ask_close
+  signal_buy_column: ask_close
+  signal_exit_column: ask_close
+  take_profit: 1.0
+  stop_loss: 0.0
