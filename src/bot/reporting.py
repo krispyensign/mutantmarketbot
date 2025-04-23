@@ -8,7 +8,7 @@ import logging
 logger = logging.getLogger("reporting")
 
 ENTRY_COLUMN = "ask_close"
-EXIT_COLUMN = "bid_high"
+EXIT_COLUMN = "bid_close"
 
 
 def report(
@@ -58,14 +58,14 @@ def report(
     logger.info("recent trades")
     logger.info(
         "\n"
-        + df_orders.tail(12)
+        + df_orders.tail(2)
         .round(round_amount)
         .to_string(index=False, header=True, justify="left")
     )
     logger.debug("current status")
     logger.debug(
         "\n"
-        + df_ticks.tail(6)
+        + df_ticks.tail(2)
         .round(round_amount)
         .to_string(index=False, header=True, justify="left")
     )

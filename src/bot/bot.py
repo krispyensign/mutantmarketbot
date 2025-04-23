@@ -60,6 +60,9 @@ def bot_run(
         second=0, microsecond=0
     )
 
+    if trade_id == -1 and current_time.minute % 5 != 0:
+        return trade_id, df, None
+
     # check if the current time is greater than the recent last time
     if (current_time - recent_last_time).total_seconds() > HALF_MINUTE:
         return trade_id, df, Exception(f"curr:{current_time} last:{recent_last_time}")
@@ -163,9 +166,6 @@ def bot(
         token=token,
         instrument=chart_conf.instrument,
     )
-
-    # wait until next 5 minute
-    sleep_until_next_5_minute(trade_id=-1)
 
     # run bot
     trade_id: int = -1
