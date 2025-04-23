@@ -14,6 +14,7 @@ logging.root.handlers = []
 TOKEN = os.environ.get("OANDA_TOKEN")
 ACCOUNT_ID = os.environ.get("OANDA_ACCOUNT_ID")
 
+
 def get_logger(file_name: str):
     """Get logger for main module."""
     logging.basicConfig(
