@@ -8,7 +8,7 @@ import uuid
 import v20  # type: ignore
 import pandas as pd
 
-from bot.backtest import ChartConfig, PerfTimer, Record, SignalConfig
+from bot.backtest import ChartConfig, PerfTimer, SignalConfig
 from core.kernel import KernelConfig, kernel
 from bot.reporting import report
 from bot.exchange import (
@@ -52,14 +52,27 @@ def bot_run(
         return -1, None, err
 
     # run kernel on candles
-    recent_last_time = datetime.fromisoformat(df.iloc[-1]["timestamp"])
-    df, rec = run_kernel(df, signal_conf, chart_conf)
+    df = kernel(
+        df,
+        include_incomplete=False,
+        config=KernelConfig(
+            signal_buy_column=signal_conf.signal_buy_column,
+            signal_exit_column=signal_conf.signal_exit_column,
+            source_column=signal_conf.source_column,
+            wma_period=chart_conf.wma_period,
+            stop_loss=signal_conf.stop_loss,
+            take_profit=signal_conf.take_profit,
+        ),
+    )
 
     # get the current time
+    recent_last_time = datetime.fromisoformat(df.iloc[-1]["timestamp"])
     current_time = datetime.now(tz=recent_last_time.tzinfo).replace(
         second=0, microsecond=0
     )
 
+    # check if the current time is a 5 minute interval
+    rec = df.iloc[-1]
     if trade_id == -1 and current_time.minute % 5 != 0:
         return trade_id, df, None
 
@@ -74,22 +87,9 @@ def bot_run(
                 ctx,
                 trade_conf.amount,
                 trade_conf.bot_id,
-                take_profit=rec.take_profit,
             )
         except Exception as err:
             return trade_id, df, err
-    elif rec.signal == 1 and trade_id != -1:
-        try:
-            close_trade(ctx, trade_id)
-            trade_id = place_order(
-                ctx,
-                trade_conf.amount,
-                trade_conf.bot_id,
-                take_profit=rec.take_profit,
-            )
-        except Exception as err:
-            return trade_id, df, err
-
     # close order
     elif (rec.trigger == -1 and trade_id != -1) or (
         rec.trigger == 0 and rec.signal == 0 and trade_id != -1
@@ -100,35 +100,6 @@ def bot_run(
             return trade_id, df, err
 
     return trade_id, df, None
-
-
-def run_kernel(df: pd.DataFrame, signal_conf: SignalConfig, chart_conf: ChartConfig):
-    """Run the kernel on the dataframe."""
-    kernel_conf = KernelConfig(
-        signal_buy_column=signal_conf.signal_buy_column,
-        signal_exit_column=signal_conf.signal_exit_column,
-        source_column=signal_conf.source_column,
-        wma_period=chart_conf.wma_period,
-        stop_loss=signal_conf.stop_loss,
-        take_profit=signal_conf.take_profit,
-    )
-    df = kernel(
-        df,
-        include_incomplete=False,
-        config=kernel_conf,
-    )
-    frame = df.iloc[-1]
-    rec = Record(
-        signal=frame["signal"],
-        trigger=frame["trigger"],
-        losses=frame["losses"],
-        wins=frame["wins"],
-        exit_total=frame["exit_total"],
-        min_exit_total=frame["min_exit_total"],
-        take_profit=frame["take_profit"] + frame["entry_price"],
-    )
-
-    return df, rec
 
 
 def bot(

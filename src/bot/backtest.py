@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 import itertools
+from typing import Any
 import pandas as pd
 import v20  # type: ignore
 from alive_progress import alive_it  # type: ignore
@@ -73,11 +74,12 @@ class Record:
     wins: int
     exit_total: float
     min_exit_total: float
-    take_profit: float
+    atr: float
+    entry_price: float
 
     def __str__(self) -> str:
         """Return a string representation of the Record object."""
-        return f"w:{self.wins} l:{self.losses}, tp:{round(self.take_profit, 5)}, q:{round(self.exit_total, 5)}, q_min:{round(self.min_exit_total, 5)}"
+        return f"w:{self.wins} l:{self.losses}, q:{round(self.exit_total, 5)}, q_min:{round(self.min_exit_total, 5)}"
 
 
 @dataclass
@@ -90,7 +92,7 @@ class ChartConfig:
     candle_count: int
 
 
-def backtest(chart_config: ChartConfig, token: str) -> SignalConfig | None:
+def backtest(chart_config: ChartConfig, token: str) -> KernelConfig | None:
     """Run a backtest of the trading strategy.
 
     Parameters
@@ -126,12 +128,9 @@ def backtest(chart_config: ChartConfig, token: str) -> SignalConfig | None:
         chart_config.wma_period,
     )
 
-    best_max_conf = SignalConfig("", "", "", 0.0, 0.0)
-    not_worst_conf = SignalConfig("", "", "", 0.0, 0.0)
     best_df = pd.DataFrame()
-    not_worst_df = pd.DataFrame()
-    best_rec = Record(0, 0, 0, 0, -99.0, -99.0, 0.0)
-    not_worst_rec = Record(0, 0, 0, 0, -99.0, -99.0, 0.0)
+    best_rec: pd.Series[Any] | None = None
+    best_conf: KernelConfig | None = None
 
     column_pairs = itertools.product(
         SOURCE_COLUMNS, SOURCE_COLUMNS, SOURCE_COLUMNS, TP, SL
@@ -157,9 +156,6 @@ def backtest(chart_config: ChartConfig, token: str) -> SignalConfig | None:
             if "close" not in signal_exit_column_name:
                 continue
 
-            if stop_loss_multiplier > take_profit_multiplier:
-                continue
-
             kernel_conf = KernelConfig(
                 signal_buy_column=signal_buy_column_name,
                 signal_exit_column=signal_exit_column_name,
@@ -173,83 +169,41 @@ def backtest(chart_config: ChartConfig, token: str) -> SignalConfig | None:
                 include_incomplete=False,
                 config=kernel_conf,
             )
+            if best_rec is None:
+                best_rec = df.iloc[-1]
 
-            signal_conf = SignalConfig(
-                source_column_name,
-                signal_buy_column_name,
-                signal_exit_column_name,
-                stop_loss_multiplier,
-                take_profit_multiplier,
-            )
-
-            rec = Record(
-                signal=df["signal"].iloc[-1],
-                trigger=df["trigger"].iloc[-1],
-                losses=df["losses"].iloc[-1],
-                wins=df["wins"].iloc[-1],
-                exit_total=df["exit_total"].iloc[-1],
-                min_exit_total=df["min_exit_total"].iloc[-1],
-                take_profit=df["take_profit"].iloc[-1] + df["entry_price"].iloc[-1],
-            )
+            rec = df.iloc[-1]
 
             if rec.wins == 0:
                 continue
             else:
                 total_found += 1
 
-            if rec.min_exit_total > not_worst_rec.min_exit_total:
-                logger.debug(
-                    "new min found %s %s",
-                    rec,
-                    signal_conf,
-                )
-                not_worst_rec = rec
-                not_worst_conf = signal_conf
-                not_worst_df = df.copy()
-
             if rec.exit_total > best_rec.exit_total:
                 logger.debug(
                     "new max found %s %s",
                     rec,
-                    signal_conf,
+                    kernel_conf,
                 )
                 best_rec = rec
-                best_max_conf = signal_conf
+                best_conf = kernel_conf
                 best_df = df.copy()
 
     logger.info("total_found: %s", total_found)
-    if total_found == 0:
-        logger.error("no winning combinations found")
+    if total_found == 0 or best_conf is None:
+        logger.error("no combinations found")
         return None
 
     logger.debug(
         "best max found %s %s",
-        best_max_conf,
+        best_conf,
         best_rec,
     )
     report(
         best_df,
         chart_config.instrument,
-        best_max_conf.signal_buy_column,
-        best_max_conf.signal_exit_column,
+        best_conf.signal_buy_column,
+        best_conf.signal_exit_column,
     )
 
-    logger.debug(
-        "not worst found %s %s",
-        not_worst_conf,
-        not_worst_rec,
-    )
-    report(
-        not_worst_df,
-        chart_config.instrument,
-        not_worst_conf.signal_buy_column,
-        not_worst_conf.signal_exit_column,
-    )
-
-    # choose the least worst combination to minimize loss
-    if (not_worst_rec.wins - not_worst_rec.losses) > (best_rec.wins - best_rec.losses):
-        logger.info("best min selected")
-        return not_worst_conf
-
-    logger.info("best max selected")
-    return best_max_conf
+    return kernel_conf

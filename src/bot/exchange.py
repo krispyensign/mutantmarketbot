@@ -172,12 +172,12 @@ def place_order(
     order: v20.order.MarketOrder = v20.order.MarketOrder(
         instrument=ctx.instrument,
         units=amount,
-        clientExtensions=client_extensions,
         tradeClientExtensions=client_extensions,
     )
     if take_profit > 0.0:
         takeProfitOnFill = v20.transaction.TakeProfitDetails(
-            price=f"{round(take_profit, decimals)}"
+            price=f"{round(take_profit, decimals)}",
+            clientExtensions=client_extensions,
         )
         order.takeProfitOnFill = takeProfitOnFill
 
