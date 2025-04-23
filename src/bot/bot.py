@@ -87,6 +87,7 @@ def bot_run(
                 ctx,
                 trade_conf.amount,
                 trade_conf.bot_id,
+                take_profit=rec.atr * signal_conf.take_profit + rec.entry_price,
             )
         except Exception as err:
             return trade_id, df, err
