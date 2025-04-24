@@ -137,19 +137,18 @@ def kernel(
     # calculate the entry prices:
     entry_price(df)
 
-    # recalculate the entry prices after a take profit
+    if config.stop_loss > 0:
+        sl(
+            df,
+            config.stop_loss,
+        )
+        entry_price(df)
+
     # for internally managed take profits
     if config.take_profit > 0:
         take_profit(
             df,
             config.take_profit,
-        )
-        entry_price(df)
-
-    if config.stop_loss > 0:
-        sl(
-            df,
-            config.stop_loss,
         )
         entry_price(df)
 
