@@ -125,6 +125,9 @@ def backtest(
             take_profit_multiplier,
             stop_loss_multiplier,
         ) in alive_it(column_pairs, total=column_pair_len):
+            if 'open' not in signal_exit_column_name:
+                continue
+
             kernel_conf = KernelConfig(
                 signal_buy_column=signal_buy_column_name,
                 signal_exit_column=signal_exit_column_name,
@@ -138,8 +141,10 @@ def backtest(
                 include_incomplete=False,
                 config=kernel_conf,
             )
-            if best_rec is None:
+            if best_rec is None or best_conf is None or best_df is None:
                 best_rec = df.iloc[-1]
+                best_conf = kernel_conf
+                best_df = df
 
             rec = round(df.iloc[-1], 5)
 
@@ -160,11 +165,12 @@ def backtest(
                 best_conf = kernel_conf
                 best_df = df.copy()
 
+    
     logger.info("total_found: %s", total_found)
-    if total_found == 0 or best_conf is None:
+    if total_found == 0:
         logger.error("no combinations found")
         return None
-
+    
     logger.debug(
         "best max found %s %s",
         best_conf,
@@ -173,8 +179,8 @@ def backtest(
     report(
         best_df,
         chart_config.instrument,
-        best_conf.signal_buy_column,
-        best_conf.signal_exit_column,
+        best_conf.signal_buy_column, # type: ignore
+        best_conf.signal_exit_column, # type: ignore
     )
 
     return best_conf

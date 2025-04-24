@@ -5,7 +5,7 @@ import numpy as np
 import talib
 
 ASK_COLUMN = "ask_close"
-BID_COLUMN = "bid_close"
+BID_COLUMN = "bid_open"
 
 
 def exit_total(df: pd.DataFrame) -> None:
@@ -98,7 +98,7 @@ def stop_loss(df: pd.DataFrame, stop_loss: float) -> None:
     """
     df["stop_loss"] = stop_loss * df["atr"]
     df.loc[
-        (df["position_value"] < df["stop_loss"]) & (df["trigger"] != 1), "signal"
+        (df["position_value"] < df["stop_loss"]), "signal"
     ] = 0
     df["trigger"] = df["signal"].diff().fillna(0).astype(int)
 

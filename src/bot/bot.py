@@ -35,7 +35,7 @@ class TradeConfig:
     bot_id: uuid.UUID
 
 
-def bot_run(
+def bot_run(  # noqa: PLR0911
     ctx: OandaContext,
     kernel_conf: KernelConfig,
     chart_conf: ChartConfig,
@@ -56,7 +56,7 @@ def bot_run(
     recent_last_time = datetime.fromisoformat(df.iloc[-1]["timestamp"])
     df = kernel(
         df,
-        include_incomplete=False,
+        include_incomplete=True,
         config=kernel_conf,
     )
 
@@ -69,7 +69,7 @@ def bot_run(
         second=0, microsecond=0
     )
 
-    # check if the current time is a 5 minute interval
+    # if no trades are open then resync if necessary
     if trade_id == -1 and current_time.minute % 5 != 0:
         return trade_id, df, None
 
@@ -78,7 +78,10 @@ def bot_run(
         return trade_id, df, Exception(f"curr:{current_time} last:{recent_last_time}")
 
     # place order
-    rec = df.iloc[-1]
+    if trade_id == -1:
+        rec = df.iloc[-2]
+    else:
+        rec = df.iloc[-1]
     if rec.trigger == 1 and trade_id == -1:
         try:
             trade_id = place_order(
@@ -100,7 +103,7 @@ def bot_run(
     return trade_id, df, None
 
 
-def bot(
+def bot(  # noqa: PLR0913
     token: str,
     account_id: str,
     chart_conf: ChartConfig,
