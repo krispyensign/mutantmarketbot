@@ -16,6 +16,7 @@ def report(
     instrument: str,
     signal_buy_column: str,
     signal_exit_column: str,
+    length: int = 2,
 ):
     """Print a report of the trading results.
 
@@ -29,6 +30,8 @@ def report(
         The column name for the buy signal data.
     signal_exit_column : str
         The column name for the exit signal data.
+    length : int, optional
+        The number of rows to print, by default 2
 
     """
     df_ticks = df.reset_index()[
@@ -58,14 +61,14 @@ def report(
     logger.info("recent trades")
     logger.info(
         "\n"
-        + df_orders.tail(2)
+        + df_orders.tail(length)
         .round(round_amount)
         .to_string(index=False, header=True, justify="left")
     )
     logger.debug("current status")
     logger.debug(
         "\n"
-        + df_ticks.tail(2)
+        + df_ticks.tail(length)
         .round(round_amount)
         .to_string(index=False, header=True, justify="left")
     )

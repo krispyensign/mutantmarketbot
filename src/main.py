@@ -47,8 +47,14 @@ if __name__ == "__main__":
         instrument = sys.argv[2]
         conf = yaml.safe_load(open(sys.argv[3]))
         chart_conf = ChartConfig(instrument, **conf["chart_config"])
+        tp = [0.0]
+        sl = [0.0]
+        if 'take_profit' in conf:
+            tp = conf['take_profit']
+        if 'stop_loss' in conf:
+            sl = conf['stop_loss']
 
-        result = backtest(chart_conf, token=TOKEN)
+        result = backtest(chart_conf, token=TOKEN, take_profit=tp, stop_loss=sl)
         logger.info(result)
         if result is None:
             sys.exit(1)

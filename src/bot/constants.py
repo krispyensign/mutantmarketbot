@@ -1,8 +1,5 @@
 """Configuration variables."""
 
-TP = [1.0]
-SL = [0.0]
-
 SOURCE_COLUMNS = [
     "ha_open",
     "ha_low",
@@ -16,4 +13,16 @@ SOURCE_COLUMNS = [
     "ha_ask_low",
     "ha_ask_close",
     "ha_ask_high",
+    "open",
+    "low",
+    "close",
+    "high",
+    "bid_open",
+    "bid_low",
+    "bid_close",
+    "bid_high",
+    "ask_open",
+    "ask_low",
+    "ask_close",
+    "ask_high",
 ]

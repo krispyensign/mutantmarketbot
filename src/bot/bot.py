@@ -172,6 +172,7 @@ def bot(
                 chart_conf.instrument,
                 kernel_conf.signal_buy_column,
                 kernel_conf.signal_exit_column,
+                length=10 if observe_only else 2,
             )
 
         if observe_only:
