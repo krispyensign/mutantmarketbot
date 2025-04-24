@@ -5,8 +5,9 @@ import sys
 
 import yaml
 
-from bot.backtest import ChartConfig, SignalConfig, backtest
+from bot.backtest import ChartConfig, backtest
 from bot.bot import TradeConfig, bot
+from core.kernel import KernelConfig
 import os
 
 logging.root.handlers = []
@@ -55,20 +56,25 @@ if __name__ == "__main__":
         logger = get_logger("bot.log")
         conf = yaml.safe_load(open(sys.argv[2]))
         chart_conf = ChartConfig(**conf["chart_config"])
-        signal_conf = SignalConfig(**conf["signal_config"])
+        kernel_conf = KernelConfig(**conf["kernel_config"])
         trade_conf = TradeConfig(**conf["trade_config"])
+        if "observe" in sys.argv:
+            observe_only = True
+        else:
+            observe_only = False
         bot(
             token=TOKEN,
             account_id=ACCOUNT_ID,
             chart_conf=chart_conf,
-            signal_conf=signal_conf,
+            kernel_conf=kernel_conf,
             trade_conf=trade_conf,
+            observe_only=observe_only,
         )
     else:
         print(sys.argv)
         print("""
             MutantMakerBot
               Usage: 
-                python main.py backtest <token> <my_config>.yaml
-                python main.py bot <token> <account_id> <my_config>.yaml
+                python main.py backtest <my_config>.yaml
+                python main.py bot <my_config>.yaml [observe]
               """)

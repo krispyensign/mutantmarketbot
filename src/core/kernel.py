@@ -25,6 +25,10 @@ class KernelConfig:
     take_profit: float = 0
     stop_loss: float = 0
 
+    def __str__(self):
+        """Return a string representation of the SignalConfig object."""
+        return f"so:{self.source_column}, sib:{self.signal_buy_column}, sie:{self.signal_exit_column}, sl:{self.stop_loss}, tp:{self.take_profit}"
+
 
 def wma_signals(
     df: pd.DataFrame,

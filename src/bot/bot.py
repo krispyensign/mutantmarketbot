@@ -8,7 +8,7 @@ import uuid
 import v20  # type: ignore
 import pandas as pd
 
-from bot.backtest import ChartConfig, PerfTimer, SignalConfig
+from bot.backtest import ChartConfig, PerfTimer
 from core.kernel import KernelConfig, kernel
 from bot.reporting import report
 from bot.exchange import (
@@ -37,9 +37,10 @@ class TradeConfig:
 
 def bot_run(
     ctx: OandaContext,
-    signal_conf: SignalConfig,
+    kernel_conf: KernelConfig,
     chart_conf: ChartConfig,
     trade_conf: TradeConfig,
+    observe_only: bool = False,
 ) -> tuple[int, pd.DataFrame | None, Exception | None]:
     """Run the bot."""
     # get open trades and candles
@@ -56,15 +57,12 @@ def bot_run(
     df = kernel(
         df,
         include_incomplete=False,
-        config=KernelConfig(
-            signal_buy_column=signal_conf.signal_buy_column,
-            signal_exit_column=signal_conf.signal_exit_column,
-            source_column=signal_conf.source_column,
-            wma_period=chart_conf.wma_period,
-            stop_loss=signal_conf.stop_loss,
-            take_profit=signal_conf.take_profit,
-        ),
+        config=kernel_conf,
     )
+
+    # observe only and do not trade
+    if observe_only:
+        return trade_id, df, None
 
     # get the current time
     current_time = datetime.now(tz=recent_last_time.tzinfo).replace(
@@ -106,8 +104,9 @@ def bot(
     token: str,
     account_id: str,
     chart_conf: ChartConfig,
-    signal_conf: SignalConfig,
+    kernel_conf: KernelConfig,
     trade_conf: TradeConfig,
+    observe_only: bool,
 ) -> None:
     """Bot that trades on Oanda.
 
@@ -122,15 +121,18 @@ def bot(
         The Oanda account ID.
     chart_conf : ChartConfig
         The chart configuration.
-    signal_conf : SignalConfig
-        The signal configuration.
+    kernel_conf : KernelConfig
+        The kernel configuration.
     trade_conf : TradeConfig
         The trade configuration.
+    observe_only : bool, optional
+        Whether to observe only. The default is False.
 
     """
     logger.info("starting bot.")
 
-    sleep_until_next_5_minute(trade_id=-1)
+    if not observe_only:
+        sleep_until_next_5_minute(trade_id=-1)
 
     # create Oanda context
     ctx = OandaContext(
@@ -148,9 +150,10 @@ def bot(
         with PerfTimer(APP_START_TIME, logger):
             trade_id, df, err = bot_run(
                 ctx,
-                signal_conf,
+                kernel_conf,
                 chart_conf=chart_conf,
                 trade_conf=trade_conf,
+                observe_only=observe_only,
             )
 
         if err is not None:
@@ -158,7 +161,7 @@ def bot(
             sleep(2)
             continue
 
-        logger.info(f"columns used: {signal_conf}")
+        logger.info(f"columns used: {kernel_conf}")
         logger.info(f"trade id: {trade_id}")
         logger.info(f"run complete. {trade_conf.bot_id}")
 
@@ -167,9 +170,12 @@ def bot(
             report(
                 df,
                 chart_conf.instrument,
-                signal_conf.signal_buy_column,
-                signal_conf.signal_exit_column,
+                kernel_conf.signal_buy_column,
+                kernel_conf.signal_exit_column,
             )
+
+        if observe_only:
+            break
 
         sleep_until_next_5_minute(trade_id=trade_id)
 

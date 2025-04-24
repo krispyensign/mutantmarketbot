@@ -49,19 +49,19 @@ class PerfTimer:
         self.logger.info("last run time: %s", self.end.strftime("%Y-%m-%d %H:%M:%S"))
 
 
-@dataclass
-class SignalConfig:
-    """SignalConfig class."""
+# @dataclass
+# class SignalConfig:
+#     """SignalConfig class."""
 
-    source_column: str
-    signal_buy_column: str
-    signal_exit_column: str
-    stop_loss: float
-    take_profit: float
+#     source_column: str
+#     signal_buy_column: str
+#     signal_exit_column: str
+#     stop_loss: float
+#     take_profit: float
 
-    def __str__(self):
-        """Return a string representation of the SignalConfig object."""
-        return f"so:{self.source_column}, sib:{self.signal_buy_column}, sie:{self.signal_exit_column}, sl:{self.stop_loss}, tp:{self.take_profit}"
+#     def __str__(self):
+#         """Return a string representation of the SignalConfig object."""
+#         return f"so:{self.source_column}, sib:{self.signal_buy_column}, sie:{self.signal_exit_column}, sl:{self.stop_loss}, tp:{self.take_profit}"
 
 
 @dataclass
@@ -70,8 +70,8 @@ class ChartConfig:
 
     instrument: str
     granularity: str
-    wma_period: int
     candle_count: int
+    wma_period: int
 
 
 def backtest(chart_config: ChartConfig, token: str) -> KernelConfig | None:
@@ -104,10 +104,9 @@ def backtest(chart_config: ChartConfig, token: str) -> KernelConfig | None:
         ctx, count=chart_config.candle_count, granularity=chart_config.granularity
     )
     logger.info(
-        "count: %s granularity: %s wma_period: %s",
+        "count: %s granularity: %s",
         chart_config.candle_count,
         chart_config.granularity,
-        chart_config.wma_period,
     )
 
     best_df = pd.DataFrame()
