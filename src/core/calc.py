@@ -97,7 +97,9 @@ def stop_loss(df: pd.DataFrame, stop_loss: float) -> None:
 
     """
     df["stop_loss"] = stop_loss * df["atr"]
-    df.loc[(df["position_value"] < df["stop_loss"]), "signal"] = 0
+    df.loc[
+        (df["position_value"] < df["stop_loss"]) & (df["trigger"] != 1), "signal"
+    ] = 0
     df["trigger"] = df["signal"].diff().fillna(0).astype(int)
 
 

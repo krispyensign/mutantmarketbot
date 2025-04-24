@@ -57,7 +57,12 @@ class ChartConfig:
     wma_period: int
 
 
-def backtest(chart_config: ChartConfig, token: str, take_profit: list[float] = [0.0], stop_loss: list[float] = [0.0]) -> KernelConfig | None:
+def backtest(
+    chart_config: ChartConfig,
+    token: str,
+    take_profit: list[float] = [0.0],
+    stop_loss: list[float] = [0.0],
+) -> KernelConfig | None:
     """Run a backtest of the trading strategy.
 
     Parameters
