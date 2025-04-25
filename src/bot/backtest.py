@@ -183,6 +183,7 @@ def backtest(
         chart_config.instrument,
         best_conf.signal_buy_column, # type: ignore
         best_conf.signal_exit_column, # type: ignore
+        length=10,
     )
 
     return best_conf
