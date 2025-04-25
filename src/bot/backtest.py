@@ -10,8 +10,6 @@ from alive_progress import alive_it  # type: ignore
 
 from bot.constants import (
     SOURCE_COLUMNS,
-    TP,
-    SL,
 )
 from core.kernel import KernelConfig, kernel
 from bot.exchange import (
@@ -50,31 +48,21 @@ class PerfTimer:
 
 
 @dataclass
-class SignalConfig:
-    """SignalConfig class."""
-
-    source_column: str
-    signal_buy_column: str
-    signal_exit_column: str
-    stop_loss: float
-    take_profit: float
-
-    def __str__(self):
-        """Return a string representation of the SignalConfig object."""
-        return f"so:{self.source_column}, sib:{self.signal_buy_column}, sie:{self.signal_exit_column}, sl:{self.stop_loss}, tp:{self.take_profit}"
-
-
-@dataclass
 class ChartConfig:
     """ChartConfig class."""
 
     instrument: str
     granularity: str
-    wma_period: int
     candle_count: int
+    wma_period: int
 
 
-def backtest(chart_config: ChartConfig, token: str) -> KernelConfig | None:
+def backtest(
+    chart_config: ChartConfig,
+    token: str,
+    take_profit: list[float] = [0.0],
+    stop_loss: list[float] = [0.0],
+) -> KernelConfig | None:
     """Run a backtest of the trading strategy.
 
     Parameters
@@ -83,6 +71,10 @@ def backtest(chart_config: ChartConfig, token: str) -> KernelConfig | None:
         The chart configuration.
     token : str
         The Oanda API token.
+    take_profit : list[float], optional
+        The take profit values, by default [0.0]
+    stop_loss : list[float], optional
+        The stop loss values, by default [0.0]
 
     Notes
     -----
@@ -104,10 +96,9 @@ def backtest(chart_config: ChartConfig, token: str) -> KernelConfig | None:
         ctx, count=chart_config.candle_count, granularity=chart_config.granularity
     )
     logger.info(
-        "count: %s granularity: %s wma_period: %s",
+        "count: %s granularity: %s",
         chart_config.candle_count,
         chart_config.granularity,
-        chart_config.wma_period,
     )
 
     best_df = pd.DataFrame()
@@ -115,14 +106,14 @@ def backtest(chart_config: ChartConfig, token: str) -> KernelConfig | None:
     best_conf: KernelConfig | None = None
 
     column_pairs = itertools.product(
-        SOURCE_COLUMNS, SOURCE_COLUMNS, SOURCE_COLUMNS, TP, SL
+        SOURCE_COLUMNS, SOURCE_COLUMNS, SOURCE_COLUMNS, take_profit, stop_loss
     )
     column_pair_len = (
         len(SOURCE_COLUMNS)
         * len(SOURCE_COLUMNS)
         * len(SOURCE_COLUMNS)
-        * len(TP)
-        * len(SL)
+        * len(take_profit)
+        * len(stop_loss)
     )
     logger.info(f"total_combinations: {column_pair_len}")
     total_found = 0
@@ -134,6 +125,11 @@ def backtest(chart_config: ChartConfig, token: str) -> KernelConfig | None:
             take_profit_multiplier,
             stop_loss_multiplier,
         ) in alive_it(column_pairs, total=column_pair_len):
+            if 'open' not in signal_exit_column_name:
+                continue
+            if 'open' not in source_column_name:
+                continue
+
             kernel_conf = KernelConfig(
                 signal_buy_column=signal_buy_column_name,
                 signal_exit_column=signal_exit_column_name,
@@ -147,10 +143,12 @@ def backtest(chart_config: ChartConfig, token: str) -> KernelConfig | None:
                 include_incomplete=False,
                 config=kernel_conf,
             )
-            if best_rec is None:
+            if best_rec is None or best_conf is None or best_df is None:
                 best_rec = df.iloc[-1]
+                best_conf = kernel_conf
+                best_df = df
 
-            rec = df.iloc[-1]
+            rec = round(df.iloc[-1], 5)
 
             if rec.wins == 0:
                 continue
@@ -159,19 +157,22 @@ def backtest(chart_config: ChartConfig, token: str) -> KernelConfig | None:
 
             if rec.exit_total > best_rec.exit_total:
                 logger.debug(
-                    "new max found %s %s",
-                    rec,
+                    "new max found q:%s w:%s l:%s %s",
+                    rec.exit_total,
+                    rec.wins,
+                    rec.losses,
                     kernel_conf,
                 )
                 best_rec = rec
                 best_conf = kernel_conf
                 best_df = df.copy()
 
+    
     logger.info("total_found: %s", total_found)
-    if total_found == 0 or best_conf is None:
+    if total_found == 0:
         logger.error("no combinations found")
         return None
-
+    
     logger.debug(
         "best max found %s %s",
         best_conf,
@@ -180,8 +181,9 @@ def backtest(chart_config: ChartConfig, token: str) -> KernelConfig | None:
     report(
         best_df,
         chart_config.instrument,
-        best_conf.signal_buy_column,
-        best_conf.signal_exit_column,
+        best_conf.signal_buy_column, # type: ignore
+        best_conf.signal_exit_column, # type: ignore
+        length=10,
     )
 
     return best_conf

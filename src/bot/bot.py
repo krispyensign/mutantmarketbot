@@ -8,7 +8,7 @@ import uuid
 import v20  # type: ignore
 import pandas as pd
 
-from bot.backtest import ChartConfig, PerfTimer, SignalConfig
+from bot.backtest import ChartConfig, PerfTimer
 from core.kernel import KernelConfig, kernel
 from bot.reporting import report
 from bot.exchange import (
@@ -35,11 +35,12 @@ class TradeConfig:
     bot_id: uuid.UUID
 
 
-def bot_run(
+def bot_run(  # noqa: PLR0911
     ctx: OandaContext,
-    signal_conf: SignalConfig,
+    kernel_conf: KernelConfig,
     chart_conf: ChartConfig,
     trade_conf: TradeConfig,
+    observe_only: bool = False,
 ) -> tuple[int, pd.DataFrame | None, Exception | None]:
     """Run the bot."""
     # get open trades and candles
@@ -55,23 +56,20 @@ def bot_run(
     recent_last_time = datetime.fromisoformat(df.iloc[-1]["timestamp"])
     df = kernel(
         df,
-        include_incomplete=False,
-        config=KernelConfig(
-            signal_buy_column=signal_conf.signal_buy_column,
-            signal_exit_column=signal_conf.signal_exit_column,
-            source_column=signal_conf.source_column,
-            wma_period=chart_conf.wma_period,
-            stop_loss=signal_conf.stop_loss,
-            take_profit=signal_conf.take_profit,
-        ),
+        include_incomplete=True,
+        config=kernel_conf,
     )
+
+    # observe only and do not trade
+    if observe_only:
+        return trade_id, df, None
 
     # get the current time
     current_time = datetime.now(tz=recent_last_time.tzinfo).replace(
         second=0, microsecond=0
     )
 
-    # check if the current time is a 5 minute interval
+    # if no trades are open then resync if necessary
     if trade_id == -1 and current_time.minute % 5 != 0:
         return trade_id, df, None
 
@@ -80,7 +78,10 @@ def bot_run(
         return trade_id, df, Exception(f"curr:{current_time} last:{recent_last_time}")
 
     # place order
-    rec = df.iloc[-1]
+    if trade_id == -1:
+        rec = df.iloc[-2]
+    else:
+        rec = df.iloc[-1]
     if rec.trigger == 1 and trade_id == -1:
         try:
             trade_id = place_order(
@@ -102,12 +103,13 @@ def bot_run(
     return trade_id, df, None
 
 
-def bot(
+def bot(  # noqa: PLR0913
     token: str,
     account_id: str,
     chart_conf: ChartConfig,
-    signal_conf: SignalConfig,
+    kernel_conf: KernelConfig,
     trade_conf: TradeConfig,
+    observe_only: bool,
 ) -> None:
     """Bot that trades on Oanda.
 
@@ -122,15 +124,18 @@ def bot(
         The Oanda account ID.
     chart_conf : ChartConfig
         The chart configuration.
-    signal_conf : SignalConfig
-        The signal configuration.
+    kernel_conf : KernelConfig
+        The kernel configuration.
     trade_conf : TradeConfig
         The trade configuration.
+    observe_only : bool, optional
+        Whether to observe only. The default is False.
 
     """
     logger.info("starting bot.")
 
-    sleep_until_next_5_minute(trade_id=-1)
+    if not observe_only:
+        sleep_until_next_5_minute(trade_id=-1)
 
     # create Oanda context
     ctx = OandaContext(
@@ -148,9 +153,10 @@ def bot(
         with PerfTimer(APP_START_TIME, logger):
             trade_id, df, err = bot_run(
                 ctx,
-                signal_conf,
+                kernel_conf,
                 chart_conf=chart_conf,
                 trade_conf=trade_conf,
+                observe_only=observe_only,
             )
 
         if err is not None:
@@ -158,7 +164,12 @@ def bot(
             sleep(2)
             continue
 
-        logger.info(f"columns used: {signal_conf}")
+        if df is not None:
+            rec = round(df.iloc[-1], 5)
+            min_exit_value = round(df["exit_value"].min(), 5)
+            max_exit_value = round(df["exit_value"].max(), 5)
+            logger.info(f"w: {rec.wins} l: {rec.losses} min: {min_exit_value} max: {max_exit_value}")
+        logger.info(f"columns used: {kernel_conf}")
         logger.info(f"trade id: {trade_id}")
         logger.info(f"run complete. {trade_conf.bot_id}")
 
@@ -167,9 +178,13 @@ def bot(
             report(
                 df,
                 chart_conf.instrument,
-                signal_conf.signal_buy_column,
-                signal_conf.signal_exit_column,
+                kernel_conf.signal_buy_column,
+                kernel_conf.signal_exit_column,
+                length=10 if observe_only else 2,
             )
+
+        if observe_only:
+            break
 
         sleep_until_next_5_minute(trade_id=trade_id)
 

@@ -25,6 +25,10 @@ class KernelConfig:
     take_profit: float = 0
     stop_loss: float = 0
 
+    def __str__(self):
+        """Return a string representation of the SignalConfig object."""
+        return f"so:{self.source_column}, sib:{self.signal_buy_column}, sie:{self.signal_exit_column}, sl:{self.stop_loss}, tp:{self.take_profit}"
+
 
 def wma_signals(
     df: pd.DataFrame,
@@ -73,12 +77,13 @@ def wma_signals(
 
     # check if the buy column is greater than the wma
     df.loc[df[signal_buy_column] > df["wma"], "signal"] = 1
+    df["trigger"] = df["signal"].diff().fillna(0).astype(int)
 
     if signal_buy_column != signal_exit_column:
         # check if the exit column is less than the wma
-        df.loc[df[signal_exit_column] < df["wma"], "signal"] = 0
+        df.loc[(df[signal_exit_column] < df["wma"]) & (df["trigger"] != 1), "signal"] = 0
+        df["trigger"] = df["signal"].diff().fillna(0).astype(int)
 
-    df["trigger"] = df["signal"].diff().fillna(0).astype(int)
 
 
 def kernel(
@@ -133,7 +138,6 @@ def kernel(
     # calculate the entry prices:
     entry_price(df)
 
-    # recalculate the entry prices after a take profit
     # for internally managed take profits
     if config.take_profit > 0:
         take_profit(

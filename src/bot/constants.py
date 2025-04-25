@@ -1,9 +1,18 @@
 """Configuration variables."""
 
-TP = [1.0]
-SL = [0.0]
-
 SOURCE_COLUMNS = [
+    "open",
+    "low",
+    "close",
+    "high",
+    "bid_open",
+    "bid_low",
+    "bid_close",
+    "bid_high",
+    "ask_open",
+    "ask_low",
+    "ask_close",
+    "ask_high",
     "ha_open",
     "ha_low",
     "ha_close",
