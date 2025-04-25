@@ -15,6 +15,15 @@ logging.root.handlers = []
 TOKEN = os.environ.get("OANDA_TOKEN")
 ACCOUNT_ID = os.environ.get("OANDA_ACCOUNT_ID")
 
+USAGE = """
+    mutantmarketbot
+      Usage: 
+        python main.py backtest EUR_USD <my_config>.yaml
+        python main.py bot <my_config>.yaml [observe]
+      ENV:
+        OANDA_TOKEN=<token>
+        OANDA_ACCOUNT_ID=<account_id>
+      """
 
 def get_logger(file_name: str):
     """Get logger for main module."""
@@ -32,15 +41,7 @@ def get_logger(file_name: str):
 if __name__ == "__main__":
     if TOKEN is None or ACCOUNT_ID is None:
         print(sys.argv)
-        print("""
-            MutantMakerBot
-              Usage: 
-                python main.py backtest EUR_USD <my_config>.yaml
-                python main.py bot <my_config>.yaml
-              ENV:
-                OANDA_TOKEN=<token>
-                OANDA_ACCOUNT_ID=<account_id>
-              """)
+        print(USAGE)
         sys.exit(1)
     if "backtest" in sys.argv[1]:
         logger = get_logger("backtest.log")
@@ -78,9 +79,4 @@ if __name__ == "__main__":
         )
     else:
         print(sys.argv)
-        print("""
-            MutantMakerBot
-              Usage: 
-                python main.py backtest <my_config>.yaml
-                python main.py bot <my_config>.yaml [observe]
-              """)
+        print(USAGE)
