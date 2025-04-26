@@ -61,7 +61,7 @@ def report(
     logger.info("recent trades")
     logger.info(
         "\n"
-        + df_orders.tail(length)
+        + df_orders.tail(length * 2)
         .round(round_amount)
         .to_string(index=False, header=True, justify="left")
     )
