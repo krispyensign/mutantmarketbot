@@ -125,11 +125,6 @@ def backtest(
             take_profit_multiplier,
             stop_loss_multiplier,
         ) in alive_it(column_pairs, total=column_pair_len):
-            if 'open' not in signal_exit_column_name:
-                continue
-            if 'open' not in source_column_name:
-                continue
-
             kernel_conf = KernelConfig(
                 signal_buy_column=signal_buy_column_name,
                 signal_exit_column=signal_exit_column_name,

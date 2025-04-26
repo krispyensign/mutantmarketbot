@@ -81,7 +81,7 @@ def wma_signals(
 
     if signal_buy_column != signal_exit_column:
         # check if the exit column is less than the wma
-        df.loc[(df[signal_exit_column] < df["wma"]) & (df["trigger"] != 1), "signal"] = 0
+        df.loc[(df[signal_exit_column] < df["wma"]), "signal"] = 0
         df["trigger"] = df["signal"].diff().fillna(0).astype(int)
 
 

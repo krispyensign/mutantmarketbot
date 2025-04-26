@@ -56,7 +56,7 @@ def bot_run(  # noqa: PLR0911
     recent_last_time = datetime.fromisoformat(df.iloc[-1]["timestamp"])
     df = kernel(
         df,
-        include_incomplete=True,
+        include_incomplete=False,
         config=kernel_conf,
     )
 
@@ -78,27 +78,21 @@ def bot_run(  # noqa: PLR0911
         return trade_id, df, Exception(f"curr:{current_time} last:{recent_last_time}")
 
     # place order
-    if trade_id == -1:
-        rec = df.iloc[-2]
-    else:
+    try:
         rec = df.iloc[-1]
-    if rec.trigger == 1 and trade_id == -1:
-        try:
+        if rec.trigger == 1 and trade_id == -1:
             trade_id = place_order(
                 ctx,
                 trade_conf.amount,
                 trade_conf.bot_id,
             )
-        except Exception as err:
-            return trade_id, df, err
-    # close order
-    elif (rec.trigger == -1 and trade_id != -1) or (
-        rec.trigger == 0 and rec.signal == 0 and trade_id != -1
-    ):
-        try:
+        # close order
+        elif (rec.trigger == -1 and trade_id != -1) or (
+            rec.trigger == 0 and rec.signal == 0 and trade_id != -1
+        ):
             close_trade(ctx, trade_id)
-        except Exception as err:
-            return trade_id, df, err
+    except Exception as err:
+        return trade_id, df, err
 
     return trade_id, df, None
 
