@@ -162,12 +162,11 @@ def backtest(
                 best_conf = kernel_conf
                 best_df = df.copy()
 
-    
     logger.info("total_found: %s", total_found)
     if total_found == 0:
         logger.error("no combinations found")
         return None
-    
+
     logger.debug(
         "best max found %s %s",
         best_conf,
@@ -176,8 +175,8 @@ def backtest(
     report(
         best_df,
         chart_config.instrument,
-        best_conf.signal_buy_column, # type: ignore
-        best_conf.signal_exit_column, # type: ignore
+        best_conf.signal_buy_column,  # type: ignore
+        best_conf.signal_exit_column,  # type: ignore
         length=10,
     )
 
