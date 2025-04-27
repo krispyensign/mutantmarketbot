@@ -7,7 +7,7 @@ import pandas as pd
 
 from core.chart import heiken_ashi_numpy
 from core.calc import (
-    entry_price_numpy,
+    entry_price,
     exit_total,
     take_profit,
     stop_loss as sl,
@@ -145,7 +145,7 @@ def kernel(
 
     # calculate the entry prices:
     df["internal_bit_mask"], df["entry_price"], df["position_value"] = (
-        entry_price_numpy(
+        entry_price(
             df[ASK_COLUMN].to_numpy(),
             df[BID_COLUMN].to_numpy(),
             df["signal"].to_numpy(),
@@ -160,7 +160,7 @@ def kernel(
             config.take_profit,
         )
         df["internal_bit_mask"], df["entry_price"], df["position_value"] = (
-            entry_price_numpy(
+            entry_price(
                 df[ASK_COLUMN].to_numpy(),
                 df[BID_COLUMN].to_numpy(),
                 df["signal"].to_numpy(),
@@ -169,12 +169,14 @@ def kernel(
         )
 
     if config.stop_loss > 0:
-        sl(
-            df,
+        df["signal"], df["trigger"] = sl(
+            df["position_value"].to_numpy(),
+            df["atr"].to_numpy(),
+            df["signal"].to_numpy(),
             config.stop_loss,
         )
         df["internal_bit_mask"], df["entry_price"], df["position_value"] = (
-            entry_price_numpy(
+            entry_price(
                 df[ASK_COLUMN].to_numpy(),
                 df[BID_COLUMN].to_numpy(),
                 df["signal"].to_numpy(),
