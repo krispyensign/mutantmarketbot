@@ -139,8 +139,6 @@ def place_order(
     ctx: OandaContext,
     amount: float,
     id: uuid.UUID,
-    take_profit: float = 0.0,
-    trailing_distance: float = 0.0,
 ) -> int:
     """Place an order on the Oanda API.
 
@@ -152,10 +150,6 @@ def place_order(
         The amount of the instrument to buy or sell.
     id : uuid.UUID
         The UUID of the app.
-    take_profit : float
-        The take profit price for the order.
-    trailing_distance : float
-        The trailing distance for the order.
 
     Returns
     -------
@@ -164,27 +158,12 @@ def place_order(
 
     """
     # place the order
-    decimals = 5
-    if ctx.instrument.split("_")[1] == "JPY":
-        decimals = 3
-
     client_extensions = v20.transaction.ClientExtensions(id=str(id), tag="mutant")
     order: v20.order.MarketOrder = v20.order.MarketOrder(
         instrument=ctx.instrument,
         units=amount,
         tradeClientExtensions=client_extensions,
     )
-    if take_profit > 0.0:
-        takeProfitOnFill = v20.transaction.TakeProfitDetails(
-            price=f"{round(take_profit, decimals)}"
-        )
-        order.takeProfitOnFill = takeProfitOnFill
-
-    if trailing_distance > 0.0:
-        trailingStopLossOnFill = v20.transaction.TrailingStopLossDetails(
-            distance=f"{round(trailing_distance, decimals)}"
-        )
-        order.trailingStopLossOnFill = trailingStopLossOnFill
     logger.info(order.json())
 
     resp: v20.response.Response = ctx.ctx.order.create(
