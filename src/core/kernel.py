@@ -45,19 +45,12 @@ def wma_signals(
     exit_data: NDArray[Any],
     wma_data: NDArray[Any],
 ) -> tuple[NDArray[Any], NDArray[Any]]:
-    """Generate trading signals based on a comparison of the Heikin-Ashi highs and lows to the wma."""
-    signals = np.zeros(len(buy_data)).astype(np.int64)
+    """Generate trading signals based on a comparison highs and lows to the wma."""
+    signals = np.where(buy_data > wma_data, 1, 0)
+    trigger = np.diff(signals).astype(np.int64)
+    trigger = np.concatenate((np.zeros(1), trigger))
 
-    # Generate signals using numpy
-    buy_signals = buy_data > wma_data
-    exit_signals = exit_data < wma_data
-
-    for i in range(1, len(signals)):
-        if buy_signals[i]:
-            signals[i] = 1
-        elif exit_signals[i] and signals[i - 1] != 1:
-            signals[i] = 0
-
+    signals = np.where((exit_data < wma_data) & (trigger != 1), 0, signals)
     trigger = np.diff(signals).astype(np.int64)
     trigger = np.concatenate((np.zeros(1), trigger))
 
