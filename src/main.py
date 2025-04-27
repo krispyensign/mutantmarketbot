@@ -25,6 +25,7 @@ USAGE = """
         OANDA_ACCOUNT_ID=<account_id>
       """
 
+
 def get_logger(file_name: str):
     """Get logger for main module."""
     logging.basicConfig(

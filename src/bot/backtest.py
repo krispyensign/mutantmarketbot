@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 import itertools
+import subprocess
 from typing import Any
 import pandas as pd
 import v20  # type: ignore
@@ -23,6 +24,33 @@ from bot.reporting import report
 
 logger = logging.getLogger("backtest")
 APP_START_TIME = datetime.now()
+
+
+def get_git_info() -> tuple[str, bool] | None:
+    """Get commit hash and whether the working tree is clean.
+
+    Returns a tuple (str, bool). The first element is the commit hash. The second
+    element is a boolean indicating whether the working tree is clean (i.e., there
+    are no pending changes).
+
+    If there is an error (e.g., not in a Git repository), the function returns None.
+    """
+    try:
+        # Get commit hash
+        commit_hash = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], encoding="utf-8"
+        ).strip()
+
+        # Get porcelain status
+        porcelain_status = subprocess.check_output(
+            ["git", "status", "--porcelain"], encoding="utf-8"
+        ).strip()
+
+        return commit_hash, porcelain_status == ""
+    except subprocess.CalledProcessError as e:
+        logger.error("Failed to get Git info: %s", e)
+        # Handle errors, e.g., when not in a Git repository
+        return None
 
 
 class PerfTimer:
@@ -84,6 +112,11 @@ def backtest(
 
     """
     logger.info("starting backtest")
+    git_info = get_git_info()
+    if git_info is None:
+        logger.error("Failed to get Git info")
+        return None
+    logger.info("git info: %s %s", git_info[0], git_info[1])
     start_time = datetime.now()
     ctx = OandaContext(
         v20.Context("api-fxpractice.oanda.com", token=token),
@@ -143,17 +176,30 @@ def backtest(
                 best_conf = kernel_conf
                 best_df = df
 
-            rec = round(df.iloc[-1], 5)
+            rec = df.iloc[-1]
 
-            if rec.wins == 0:
+            if rec.wins == 0 or rec.exit_total < 0:
                 continue
-            else:
-                total_found += 1
 
+            # copy the df and only keep the latest 10% of rows
+            orig_sample_df = orig_df.copy().iloc[
+                -int(chart_config.candle_count * 0.1) :
+            ]
+            df_sample = kernel(
+                orig_sample_df,
+                include_incomplete=False,
+                config=kernel_conf,
+            )
+            sample_rec = df_sample.iloc[-1]
+
+            if sample_rec.wins == 0 or sample_rec.exit_total < 0:
+                continue
+
+            total_found += 1
             if rec.exit_total > best_rec.exit_total:
                 logger.debug(
                     "new max found q:%s w:%s l:%s %s",
-                    rec.exit_total,
+                    round(rec.exit_total, 5),
                     rec.wins,
                     rec.losses,
                     kernel_conf,
@@ -162,12 +208,11 @@ def backtest(
                 best_conf = kernel_conf
                 best_df = df.copy()
 
-    
     logger.info("total_found: %s", total_found)
     if total_found == 0:
         logger.error("no combinations found")
         return None
-    
+
     logger.debug(
         "best max found %s %s",
         best_conf,
@@ -176,8 +221,8 @@ def backtest(
     report(
         best_df,
         chart_config.instrument,
-        best_conf.signal_buy_column, # type: ignore
-        best_conf.signal_exit_column, # type: ignore
+        best_conf.signal_buy_column,  # type: ignore
+        best_conf.signal_exit_column,  # type: ignore
         length=10,
     )
 
