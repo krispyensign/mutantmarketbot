@@ -187,33 +187,34 @@ def kernel(
     else:
         df = df.copy()
 
-    # calculate the Heikin-Ashi candlesticks
-    df["ha_open"], df["ha_high"], df["ha_low"], df["ha_close"] = heiken_ashi_numpy(
-        df["open"].to_numpy(),
-        df["high"].to_numpy(),
-        df["low"].to_numpy(),
-        df["close"].to_numpy(),
-    )
-
-    # calculate the Heikin-Ashi candlesticks for the bid prices
-    df["ha_bid_open"], df["ha_bid_high"], df["ha_bid_low"], df["ha_bid_close"] = (
-        heiken_ashi_numpy(
-            df["bid_open"].to_numpy(),
-            df["bid_high"].to_numpy(),
-            df["bid_low"].to_numpy(),
-            df["bid_close"].to_numpy(),
+    if "ha" in config.signal_buy_column or "ha" in config.signal_exit_column or "ha" in config.source_column:
+        # calculate the Heikin-Ashi candlesticks
+        df["ha_open"], df["ha_high"], df["ha_low"], df["ha_close"] = heiken_ashi_numpy(
+            df["open"].to_numpy(),
+            df["high"].to_numpy(),
+            df["low"].to_numpy(),
+            df["close"].to_numpy(),
         )
-    )
 
-    # calculate the Heikin-Ashi candlesticks for the ask prices
-    df["ha_ask_open"], df["ha_ask_high"], df["ha_ask_low"], df["ha_ask_close"] = (
-        heiken_ashi_numpy(
-            df["ask_open"].to_numpy(),
-            df["ask_high"].to_numpy(),
-            df["ask_low"].to_numpy(),
-            df["ask_close"].to_numpy(),
+        # calculate the Heikin-Ashi candlesticks for the bid prices
+        df["ha_bid_open"], df["ha_bid_high"], df["ha_bid_low"], df["ha_bid_close"] = (
+            heiken_ashi_numpy(
+                df["bid_open"].to_numpy(),
+                df["bid_high"].to_numpy(),
+                df["bid_low"].to_numpy(),
+                df["bid_close"].to_numpy(),
+            )
         )
-    )
+
+        # calculate the Heikin-Ashi candlesticks for the ask prices
+        df["ha_ask_open"], df["ha_ask_high"], df["ha_ask_low"], df["ha_ask_close"] = (
+            heiken_ashi_numpy(
+                df["ask_open"].to_numpy(),
+                df["ask_high"].to_numpy(),
+                df["ask_low"].to_numpy(),
+                df["ask_close"].to_numpy(),
+            )
+        )
 
     # calculate the ATR for the trailing stop loss
     df["atr"] = talib.ATR(
