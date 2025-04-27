@@ -37,38 +37,41 @@ def exit_total(df: pd.DataFrame) -> None:
     df["min_exit_total"] = df["exit_total"].expanding().min()
 
 
-def take_profit(df: pd.DataFrame, take_profit: float) -> None:
-    """Apply a take profit strategy to the trading data.
+def take_profit(
+    position_value: NDArray[Any], 
+    atr: NDArray[Any], 
+    signal: NDArray[Any], 
+    take_profit_value: float
+) -> tuple[NDArray[Any], NDArray[Any]]:
+    """Apply a take profit strategy to trading signals.
 
     Parameters
     ----------
-    df : pd.DataFrame
-        The DataFrame containing the trading data.
-    take_profit : float
+    position_value : np.ndarray
+        The array of position values.
+    atr : np.ndarray
+        The array of average true range (atr).
+    signal : np.ndarray
+        The array of trading signals.
+    take_profit_value : float
         The take profit value as a multiplier of the atr.
-    entry_column : str
-        The column name for the entry price.
-    exit_column : str
-        The column name for the exit price.
 
     Returns
     -------
-    pd.Dataframe
-        The DataFrame with the 'signal' and 'trigger' columns updated.
+    tuple[np.ndarray, np.ndarray]
+        A tuple containing the updated 'signal' and 'trigger' arrays.
 
     Notes
     -----
-    The 'signal' column is set to 0 where the 'value' column is greater than the 'atr'
-    column times the take profit value. The 'trigger' column is set to the difference
-    between the 'signal' and the previous value of the 'signal' column. The entry_price
-    is then re-calculated.
+    The 'signal' array is set to 0 where the 'position_value' array is greater than the
+    'atr' array times the take profit value. The 'trigger' array is set to the difference
+    between the 'signal' array and the previous value of the 'signal' array.
 
     """
-    df["take_profit"] = take_profit * df["atr"]
-    df.loc[
-        (df["position_value"] > df["take_profit"]) & (df["trigger"] != 1), "signal"
-    ] = 0
-    df["trigger"] = df["signal"].diff().fillna(0).astype(int)
+    signal = np.where(position_value > atr * take_profit_value, 0, signal)
+    trigger = np.diff(signal).astype(int)
+    trigger = np.concatenate([[0], trigger])
+    return signal, trigger
 
 
 @jit(nopython=True)

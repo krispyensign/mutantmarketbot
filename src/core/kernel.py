@@ -155,8 +155,10 @@ def kernel(
 
     # for internally managed take profits
     if config.take_profit > 0:
-        take_profit(
-            df,
+        df["signal"], df["trigger"] = take_profit(
+            df["position_value"].to_numpy(),
+            df["atr"].to_numpy(),
+            df["signal"].to_numpy(),
             config.take_profit,
         )
         df["internal_bit_mask"], df["entry_price"], df["position_value"] = (
