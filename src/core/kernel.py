@@ -46,7 +46,6 @@ def wma_signals(
     """Generate trading signals based on a comparison of the Heikin-Ashi highs and lows to the wma."""
     signals = np.zeros(len(buy_data)).astype(np.int64)
 
-
     # Generate signals using numpy
     buy_signals = buy_data > wma_data
     exit_signals = exit_data < wma_data
@@ -58,7 +57,7 @@ def wma_signals(
             signals[i] = 0
 
     trigger = np.diff(signals).astype(np.int64)
-    trigger = np.concatenate((np.zeros(1) , trigger))
+    trigger = np.concatenate((np.zeros(1), trigger))
 
     return signals, trigger
 
@@ -122,7 +121,7 @@ def kernel(
             df["ask_close"].to_numpy(),
         )
     )
-    
+
     # calculate the ATR for the trailing stop loss
     df["atr"] = talib.ATR(
         df["high"].to_numpy(),
@@ -137,20 +136,18 @@ def kernel(
     # 0 0 1 1 1 0 0 - 1 above or 0 below the wma
     # 0 0 1 0 0 -1 0 - diff gives actual trigger
     # NOTE: usage of close prices differs online than in offline trading
-    df["signal"], df["trigger"]= wma_signals(
+    df["signal"], df["trigger"] = wma_signals(
         df[config.signal_buy_column].to_numpy(),
         df[config.signal_exit_column].to_numpy(),
         df["wma"].to_numpy(),
     )
 
     # calculate the entry prices:
-    df["internal_bit_mask"], df["entry_price"], df["position_value"] = (
-        entry_price(
-            df[ASK_COLUMN].to_numpy(),
-            df[BID_COLUMN].to_numpy(),
-            df["signal"].to_numpy(),
-            df["trigger"].to_numpy(),
-        )
+    df["internal_bit_mask"], df["entry_price"], df["position_value"] = entry_price(
+        df[ASK_COLUMN].to_numpy(),
+        df[BID_COLUMN].to_numpy(),
+        df["signal"].to_numpy(),
+        df["trigger"].to_numpy(),
     )
 
     # for internally managed take profits
@@ -161,13 +158,11 @@ def kernel(
             df["signal"].to_numpy(),
             config.take_profit,
         )
-        df["internal_bit_mask"], df["entry_price"], df["position_value"] = (
-            entry_price(
-                df[ASK_COLUMN].to_numpy(),
-                df[BID_COLUMN].to_numpy(),
-                df["signal"].to_numpy(),
-                df["trigger"].to_numpy(),
-            )
+        df["internal_bit_mask"], df["entry_price"], df["position_value"] = entry_price(
+            df[ASK_COLUMN].to_numpy(),
+            df[BID_COLUMN].to_numpy(),
+            df["signal"].to_numpy(),
+            df["trigger"].to_numpy(),
         )
 
     if config.stop_loss > 0:
@@ -177,13 +172,11 @@ def kernel(
             df["signal"].to_numpy(),
             config.stop_loss,
         )
-        df["internal_bit_mask"], df["entry_price"], df["position_value"] = (
-            entry_price(
-                df[ASK_COLUMN].to_numpy(),
-                df[BID_COLUMN].to_numpy(),
-                df["signal"].to_numpy(),
-                df["trigger"].to_numpy(),
-            )
+        df["internal_bit_mask"], df["entry_price"], df["position_value"] = entry_price(
+            df[ASK_COLUMN].to_numpy(),
+            df[BID_COLUMN].to_numpy(),
+            df["signal"].to_numpy(),
+            df["trigger"].to_numpy(),
         )
 
     # calculate the exit total
