@@ -162,9 +162,7 @@ def bot(  # noqa: PLR0913
             rec = round(df.iloc[-1], 5)
             min_exit_value = round(df["exit_value"].min(), 5)
             max_exit_value = round(df["exit_value"].max(), 5)
-            logger.info(
-                f"w: {rec.wins} l: {rec.losses} min: {min_exit_value} max: {max_exit_value}"
-            )
+            logger.info(f"w: {rec.wins} l: {rec.losses} min: {min_exit_value} max: {max_exit_value}")
         logger.info(f"columns used: {kernel_conf}")
         logger.info(f"trade id: {trade_id}")
         logger.info(f"run complete. {trade_conf.bot_id}")
