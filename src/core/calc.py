@@ -37,11 +37,13 @@ def exit_total(df: pd.DataFrame) -> None:
     df["min_exit_total"] = df["exit_total"].expanding().min()
 
 
+@jit(nopython=True)
 def take_profit(
-    position_value: NDArray[Any],
-    atr: NDArray[Any],
+    position_value: NDArray[Any], 
+    atr: NDArray[Any], 
     signal: NDArray[Any],
-    take_profit_value: float,
+    trigger: NDArray[Any],
+    take_profit_value: float
 ) -> tuple[NDArray[Any], NDArray[Any]]:
     """Apply a take profit strategy to trading signals.
 
@@ -53,6 +55,8 @@ def take_profit(
         The array of average true range (atr).
     signal : np.ndarray
         The array of trading signals.
+    trigger : np.ndarray
+        The array of trigger values.
     take_profit_value : float
         The take profit value as a multiplier of the atr.
 
@@ -68,24 +72,27 @@ def take_profit(
     between the 'signal' array and the previous value of the 'signal' array.
 
     """
-    signal = np.where(position_value > atr * take_profit_value, 0, signal)
-    trigger = np.diff(signal).astype(int)
-    trigger = np.concatenate([[0], trigger])
+    take_profit_array = take_profit_value * atr
+    for i in range(len(position_value)):
+        if position_value[i] > take_profit_array[i] and trigger[i] != 1:
+            signal[i] = 0
+    trigger = np.diff(signal).astype(np.int64)
+    trigger = np.concatenate((np.zeros(1) , trigger))
     return signal, trigger
 
 
 @jit(nopython=True)
 def stop_loss(
-    position_value: NDArray[Any],
-    atr: NDArray[Any],
-    signal: NDArray[Any],
-    stop_loss_value: float,
+    position_value: NDArray[Any], 
+    atr: NDArray[Any], 
+    signal: NDArray[Any], 
+    stop_loss_value: float
 ) -> tuple[NDArray[Any], NDArray[Any]]:
     """Apply a stop loss strategy to trading signals.
 
-    This function takes arrays of position values, average true range (atr), signals,
-    and a stop loss multiplier to determine when to stop out of trades. If the position
-    value falls below the stop loss threshold, the signal is set to 0. The function
+    This function takes arrays of position values, average true range (atr), signals, 
+    and a stop loss multiplier to determine when to stop out of trades. If the position 
+    value falls below the stop loss threshold, the signal is set to 0. The function 
     calculates the trigger as the difference between consecutive signal values.
 
     Parameters
@@ -110,7 +117,7 @@ def stop_loss(
         if position_value[i] < stop_loss_array[i]:
             signal[i] = 0
     trigger = np.diff(signal).astype(np.int64)
-    trigger = np.concatenate((np.zeros(1), trigger))
+    trigger = np.concatenate((np.zeros(1) , trigger))
     return signal, trigger
 
 
@@ -166,3 +173,6 @@ def entry_price(
     position_value = (exit - entry_price) * internal_bit_mask
 
     return internal_bit_mask, entry_price, position_value
+
+
+

@@ -61,6 +61,67 @@ def wma_signals(
 
     return signals, trigger
 
+@jit(nopython=True)
+def kernel_stage_1(
+    buy_data: NDArray[Any],
+    exit_data: NDArray[Any],
+    wma_data: NDArray[Any],
+    ask_data: NDArray[Any],
+    bid_data: NDArray[Any],
+    atr: NDArray[Any],
+    take_profit_conf: float,
+    stop_loss_conf: float,
+):
+    # signal using the close prices
+    # signal and trigger interval could appears as this:
+    # 0 0 1 1 1 0 0 - 1 above or 0 below the wma
+    # 0 0 1 0 0 -1 0 - diff gives actual trigger
+    # NOTE: usage of close prices differs online than in offline trading
+    signal, trigger = wma_signals(
+        buy_data,
+        exit_data,
+        wma_data,
+    )
+
+    # calculate the entry prices:
+    _, _, position_value = entry_price(
+        ask_data,
+        bid_data,
+        signal,
+        trigger,
+    )
+    # for internally managed take profits
+    if take_profit_conf > 0:
+        signal, trigger = take_profit(
+            position_value,
+            atr,
+            signal,
+            trigger,
+            take_profit_conf,
+        )
+        _, _, position_value = entry_price(
+            ask_data,
+            bid_data,
+            signal,
+            trigger,
+        )
+
+    if stop_loss_conf > 0:
+        signal, trigger = sl(
+            position_value,
+            atr,
+            signal,
+            stop_loss_conf,
+        )
+        _, _, position_value = entry_price(
+            ask_data,
+            bid_data,
+            signal,
+            trigger,
+        )
+
+    return signal, trigger, position_value
+
 
 def kernel(
     df: pd.DataFrame,
@@ -156,6 +217,7 @@ def kernel(
             df["position_value"].to_numpy(),
             df["atr"].to_numpy(),
             df["signal"].to_numpy(),
+            df["trigger"].to_numpy(),
             config.take_profit,
         )
         df["internal_bit_mask"], df["entry_price"], df["position_value"] = entry_price(
