@@ -61,6 +61,7 @@ def wma_signals(
 
     return signals, trigger
 
+
 @jit(nopython=True)
 def kernel_stage_1(  # noqa: PLR0913
     buy_data: NDArray[Any],
@@ -187,7 +188,11 @@ def kernel(
     else:
         df = df.copy()
 
-    if "ha" in config.signal_buy_column or "ha" in config.signal_exit_column or "ha" in config.source_column:
+    if (
+        "ha" in config.signal_buy_column
+        or "ha" in config.signal_exit_column
+        or "ha" in config.source_column
+    ):
         # calculate the Heikin-Ashi candlesticks
         df["ha_open"], df["ha_high"], df["ha_low"], df["ha_close"] = heiken_ashi_numpy(
             df["open"].to_numpy(),

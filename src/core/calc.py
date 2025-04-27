@@ -39,11 +39,11 @@ def exit_total(df: pd.DataFrame) -> None:
 
 @jit(nopython=True)
 def take_profit(
-    position_value: NDArray[Any], 
-    atr: NDArray[Any], 
+    position_value: NDArray[Any],
+    atr: NDArray[Any],
     signal: NDArray[Any],
     trigger: NDArray[Any],
-    take_profit_value: float
+    take_profit_value: float,
 ) -> tuple[NDArray[Any], NDArray[Any]]:
     """Apply a take profit strategy to trading signals.
 
@@ -73,24 +73,24 @@ def take_profit(
 
     """
     take_profit_array = take_profit_value * atr
-    signal = np.where((position_value > take_profit_array) & (trigger != 1) , 0, signal)
+    signal = np.where((position_value > take_profit_array) & (trigger != 1), 0, signal)
     trigger = np.diff(signal).astype(np.int64)
-    trigger = np.concatenate((np.zeros(1) , trigger))
+    trigger = np.concatenate((np.zeros(1), trigger))
     return signal, trigger
 
 
 @jit(nopython=True)
 def stop_loss(
-    position_value: NDArray[Any], 
-    atr: NDArray[Any], 
-    signal: NDArray[Any], 
-    stop_loss_value: float
+    position_value: NDArray[Any],
+    atr: NDArray[Any],
+    signal: NDArray[Any],
+    stop_loss_value: float,
 ) -> tuple[NDArray[Any], NDArray[Any]]:
     """Apply a stop loss strategy to trading signals.
 
-    This function takes arrays of position values, average true range (atr), signals, 
-    and a stop loss multiplier to determine when to stop out of trades. If the position 
-    value falls below the stop loss threshold, the signal is set to 0. The function 
+    This function takes arrays of position values, average true range (atr), signals,
+    and a stop loss multiplier to determine when to stop out of trades. If the position
+    value falls below the stop loss threshold, the signal is set to 0. The function
     calculates the trigger as the difference between consecutive signal values.
 
     Parameters
@@ -113,7 +113,7 @@ def stop_loss(
     stop_loss_array = stop_loss_value * atr
     signal = np.where(position_value < stop_loss_array, 0, signal)
     trigger = np.diff(signal).astype(np.int64)
-    trigger = np.concatenate((np.zeros(1) , trigger))
+    trigger = np.concatenate((np.zeros(1), trigger))
     return signal, trigger
 
 
@@ -169,6 +169,3 @@ def entry_price(
     position_value = (exit - entry_price) * internal_bit_mask
 
     return internal_bit_mask, entry_price, position_value
-
-
-
