@@ -25,6 +25,7 @@ from bot.reporting import report
 logger = logging.getLogger("backtest")
 APP_START_TIME = datetime.now()
 
+
 def get_git_info() -> tuple[str, bool] | None:
     """Get commit hash and whether the working tree is clean.
 
@@ -36,16 +37,21 @@ def get_git_info() -> tuple[str, bool] | None:
     """
     try:
         # Get commit hash
-        commit_hash = subprocess.check_output(['git', 'rev-parse', 'HEAD'], encoding='utf-8').strip()
+        commit_hash = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], encoding="utf-8"
+        ).strip()
 
         # Get porcelain status
-        porcelain_status = subprocess.check_output(['git', 'status', '--porcelain'], encoding='utf-8').strip()
+        porcelain_status = subprocess.check_output(
+            ["git", "status", "--porcelain"], encoding="utf-8"
+        ).strip()
 
         return commit_hash, porcelain_status == ""
     except subprocess.CalledProcessError as e:
         logger.error("Failed to get Git info: %s", e)
         # Handle errors, e.g., when not in a Git repository
         return None
+
 
 class PerfTimer:
     """PerfTimer class."""
@@ -110,7 +116,7 @@ def backtest(
     if git_info is None:
         logger.error("Failed to get Git info")
         return None
-    logger.info("git info: %s %s" ,git_info[0], git_info[1])
+    logger.info("git info: %s %s", git_info[0], git_info[1])
     start_time = datetime.now()
     ctx = OandaContext(
         v20.Context("api-fxpractice.oanda.com", token=token),
@@ -170,20 +176,21 @@ def backtest(
                 best_conf = kernel_conf
                 best_df = df
 
-            rec = round(df.iloc[-1], 5)
-
+            rec = df.iloc[-1]
 
             if rec.wins == 0 or rec.exit_total < 0:
                 continue
 
             # copy the df and only keep the latest 10% of rows
-            orig_sample_df = orig_df.copy().iloc[-int(chart_config.candle_count * 0.1) :]
+            orig_sample_df = orig_df.copy().iloc[
+                -int(chart_config.candle_count * 0.1) :
+            ]
             df_sample = kernel(
                 orig_sample_df,
                 include_incomplete=False,
                 config=kernel_conf,
             )
-            sample_rec = round(df_sample.iloc[-1], 5)
+            sample_rec = df_sample.iloc[-1]
 
             if sample_rec.wins == 0 or sample_rec.exit_total < 0:
                 continue
@@ -192,7 +199,7 @@ def backtest(
             if rec.exit_total > best_rec.exit_total:
                 logger.debug(
                     "new max found q:%s w:%s l:%s %s",
-                    rec.exit_total,
+                    round(rec.exit_total, 5),
                     rec.wins,
                     rec.losses,
                     kernel_conf,
