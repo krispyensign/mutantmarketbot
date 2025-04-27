@@ -1,6 +1,7 @@
 """Functions for processing and generating trading signals."""
 
 from dataclasses import dataclass
+from typing import Any
 import talib
 import pandas as pd
 
@@ -11,6 +12,10 @@ from core.calc import (
     take_profit,
     stop_loss as sl,
 )
+
+import numpy as np
+from numpy.typing import NDArray
+from numba import jit  # type: ignore
 
 ASK_COLUMN = "ask_close"
 BID_COLUMN = "bid_close"
@@ -32,61 +37,30 @@ class KernelConfig:
         return f"so:{self.source_column}, sib:{self.signal_buy_column}, sie:{self.signal_exit_column}, sl:{self.stop_loss}, tp:{self.take_profit}"
 
 
+@jit(nopython=True)
 def wma_signals(
-    df: pd.DataFrame,
-    source_column: str = "open",
-    signal_buy_column: str = "bid_low",
-    signal_exit_column: str = "bid_high",
-    wma_period: int = 20,
-) -> None:
-    """Generate trading signals based on a comparison of the Heikin-Ashi highs and lows to the wma.
+    buy_data: NDArray[Any],
+    exit_data: NDArray[Any],
+    wma_data: NDArray[Any],
+) -> tuple[NDArray[Any], NDArray[Any]]:
+    """Generate trading signals based on a comparison of the Heikin-Ashi highs and lows to the wma."""
+    signals = np.zeros(len(buy_data)).astype(np.int64)
 
-    Parameters
-    ----------
-    df : pd.DataFrame
-        The DataFrame containing the trading data.
-    first_time_frame_run : bool, optional
-        Whether this is the first time frame run.
-    source_column : str, optional
-        The column name for the source data.
-    signal_buy_column : str, optional
-        The column name for the buy signal data.
-    signal_exit_column : str, optional
-        The column name for the exit signal data.
-    wma_period : int, optional
-        The period for the weighted moving average, by default 20
 
-    Returns
-    -------
-    pd.Dataframe
-        The DataFrame with the 'signal' column added.
+    # Generate signals using numpy
+    buy_signals = buy_data > wma_data
+    exit_signals = exit_data < wma_data
 
-    Notes
-    -----
-    The 'signal' column is added to the DataFrame and is set to 1 where the Heikin-Ashi high
-    is greater than the wma, and 0 where the Heikin-Ashi low is less than the wma.
+    for i in range(1, len(signals)):
+        if buy_signals[i]:
+            signals[i] = 1
+        elif exit_signals[i] and signals[i - 1] != 1:
+            signals[i] = 0
 
-    """
-    df["signal"] = 0
-    df["wma"] = talib.WMA(df[source_column].to_numpy(), wma_period)
+    trigger = np.diff(signals).astype(np.int64)
+    trigger = np.concatenate((np.zeros(1) , trigger))
 
-    # check if the buy column is greater than the wma
-    # B > W  S < W  Result
-    # T      T      X
-    # T      F      Buy
-    # F      T      Exit
-    # F      F      X
-
-    # check if the buy column is greater than the wma
-    df.loc[df[signal_buy_column] > df["wma"], "signal"] = 1
-    df["trigger"] = df["signal"].diff().fillna(0).astype(int)
-
-    if signal_buy_column != signal_exit_column:
-        # check if the exit column is less than the wma
-        df.loc[
-            (df[signal_exit_column] < df["wma"]) & (df["trigger"] != 1), "signal"
-        ] = 0
-        df["trigger"] = df["signal"].diff().fillna(0).astype(int)
+    return signals, trigger
 
 
 def kernel(
@@ -156,18 +130,17 @@ def kernel(
         df["close"].to_numpy(),
         timeperiod=config.wma_period,
     )
+    df["wma"] = talib.WMA(df[config.source_column].to_numpy(), config.wma_period)
 
     # signal using the close prices
     # signal and trigger interval could appears as this:
     # 0 0 1 1 1 0 0 - 1 above or 0 below the wma
     # 0 0 1 0 0 -1 0 - diff gives actual trigger
     # NOTE: usage of close prices differs online than in offline trading
-    wma_signals(
-        df,
-        signal_buy_column=config.signal_buy_column,
-        signal_exit_column=config.signal_exit_column,
-        wma_period=config.wma_period,
-        source_column=config.source_column,
+    df["signal"], df["trigger"]= wma_signals(
+        df[config.signal_buy_column].to_numpy(),
+        df[config.signal_exit_column].to_numpy(),
+        df["wma"].to_numpy(),
     )
 
     # calculate the entry prices:
