@@ -35,6 +35,74 @@ def exit_total(df: pd.DataFrame) -> None:
     df["min_exit_total"] = df["exit_total"].expanding().min()
 
 
+def take_profit(df: pd.DataFrame, take_profit: float) -> None:
+    """Apply a take profit strategy to the trading data.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The DataFrame containing the trading data.
+    take_profit : float
+        The take profit value as a multiplier of the atr.
+    entry_column : str
+        The column name for the entry price.
+    exit_column : str
+        The column name for the exit price.
+
+    Returns
+    -------
+    pd.Dataframe
+        The DataFrame with the 'signal' and 'trigger' columns updated.
+
+    Notes
+    -----
+    The 'signal' column is set to 0 where the 'value' column is greater than the 'atr'
+    column times the take profit value. The 'trigger' column is set to the difference
+    between the 'signal' and the previous value of the 'signal' column. The entry_price
+    is then re-calculated.
+
+    """
+    df["take_profit"] = take_profit * df["atr"]
+    df.loc[
+        (df["position_value"] > df["take_profit"]) & (df["trigger"] != 1), "signal"
+    ] = 0
+    df["trigger"] = df["signal"].diff().fillna(0).astype(int)
+
+
+def stop_loss(df: pd.DataFrame, stop_loss: float) -> None:
+    """Apply a stop loss strategy to the trading data.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The DataFrame containing the trading data.
+    stop_loss : float
+        The stop loss value as a multiplier of the atr.
+    entry_column : str
+        The column name for the entry price.
+    exit_column : str
+        The column name for the exit price.
+
+    Returns
+    -------
+    pd.Dataframe
+        The DataFrame with the 'signal' and 'trigger' columns updated.
+
+    Notes
+    -----
+    The 'signal' column is set to 0 where the 'value' column is greater than the 'atr'
+    column times the stop loss value. The 'trigger' column is set to the difference
+    between the 'signal' and the previous value of the 'signal' column. The entry_price
+    is then re-calculated.
+
+    """
+    df["stop_loss"] = stop_loss * df["atr"]
+    df.loc[
+        (df["position_value"] < df["stop_loss"]), "signal"
+    ] = 0
+    df["trigger"] = df["signal"].diff().fillna(0).astype(int)
+
+
 def entry_price(df: pd.DataFrame) -> None:
     """Calculate the entry price for a given trading signal.
 
