@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 import itertools
+import subprocess
 from typing import Any
 import pandas as pd
 import v20  # type: ignore
@@ -24,6 +25,27 @@ from bot.reporting import report
 logger = logging.getLogger("backtest")
 APP_START_TIME = datetime.now()
 
+def get_git_info() -> tuple[str, bool] | None:
+    """Get commit hash and whether the working tree is clean.
+
+    Returns a tuple (str, bool). The first element is the commit hash. The second
+    element is a boolean indicating whether the working tree is clean (i.e., there
+    are no pending changes).
+
+    If there is an error (e.g., not in a Git repository), the function returns None.
+    """
+    try:
+        # Get commit hash
+        commit_hash = subprocess.check_output(['git', 'rev-parse', 'HEAD'], encoding='utf-8').strip()
+
+        # Get porcelain status
+        porcelain_status = subprocess.check_output(['git', 'status', '--porcelain'], encoding='utf-8').strip()
+
+        return commit_hash, porcelain_status == ""
+    except subprocess.CalledProcessError as e:
+        logger.error("Failed to get Git info: %s", e)
+        # Handle errors, e.g., when not in a Git repository
+        return None
 
 class PerfTimer:
     """PerfTimer class."""
@@ -84,6 +106,11 @@ def backtest(
 
     """
     logger.info("starting backtest")
+    git_info = get_git_info()
+    if git_info is None:
+        logger.error("Failed to get Git info")
+        return None
+    logger.info("git info: %s %s" ,git_info[0], git_info[1])
     start_time = datetime.now()
     ctx = OandaContext(
         v20.Context("api-fxpractice.oanda.com", token=token),
