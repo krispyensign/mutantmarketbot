@@ -9,7 +9,7 @@ import v20  # type: ignore
 import pandas as pd
 
 from bot.backtest import ChartConfig, PerfTimer
-from core.kernel import KernelConfig, kernel
+from core.kernel import KernelConfig, kernel, EDGE
 from bot.reporting import report
 from bot.exchange import (
     close_trade,
@@ -53,10 +53,11 @@ def bot_run(  # noqa: PLR0911
         return -1, None, err
 
     # run kernel on candles
+    use_edge = (trade_id != -1) and EDGE is True
     recent_last_time = datetime.fromisoformat(df.iloc[-1]["timestamp"])
     df = kernel(
         df,
-        include_incomplete=False,
+        include_incomplete=use_edge,
         config=kernel_conf,
     )
 
@@ -74,7 +75,11 @@ def bot_run(  # noqa: PLR0911
         return trade_id, df, None
 
     # check if the current time is greater than the recent last time
-    if (current_time - recent_last_time).total_seconds() > HALF_MINUTE:
+    if (
+        EDGE is False
+        or (EDGE is True and trade_id != -1)
+        and (current_time - recent_last_time).total_seconds() > HALF_MINUTE
+    ):
         return trade_id, df, Exception(f"curr:{current_time} last:{recent_last_time}")
 
     # place order
@@ -182,7 +187,10 @@ def bot(  # noqa: PLR0913
         if observe_only:
             break
 
-        sleep_until_next_5_minute(trade_id=trade_id)
+        if EDGE is True and trade_id != -1:
+            sleep(1)
+        else:
+            sleep_until_next_5_minute(trade_id=trade_id)
 
 
 def roundUp(dt):
