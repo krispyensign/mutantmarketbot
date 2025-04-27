@@ -2,15 +2,3 @@ chart_config:
   granularity: M5
   wma_period: 20
   candle_count: 288
-
-take_profit:
-  - 0.0
-  - 0.1
-  - 0.2
-  - 0.3
-
-stop_loss:
-  - 0.0
-  - 0.1
-  - 0.2
-  - 0.3

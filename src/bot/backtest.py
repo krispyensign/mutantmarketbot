@@ -60,8 +60,6 @@ class ChartConfig:
 def backtest(
     chart_config: ChartConfig,
     token: str,
-    take_profit: list[float] = [0.0],
-    stop_loss: list[float] = [0.0],
 ) -> KernelConfig | None:
     """Run a backtest of the trading strategy.
 
@@ -71,10 +69,6 @@ def backtest(
         The chart configuration.
     token : str
         The Oanda API token.
-    take_profit : list[float], optional
-        The take profit values, by default [0.0]
-    stop_loss : list[float], optional
-        The stop loss values, by default [0.0]
 
     Notes
     -----
@@ -105,16 +99,8 @@ def backtest(
     best_rec: pd.Series[Any] | None = None
     best_conf: KernelConfig | None = None
 
-    column_pairs = itertools.product(
-        SOURCE_COLUMNS, SOURCE_COLUMNS, SOURCE_COLUMNS, take_profit, stop_loss
-    )
-    column_pair_len = (
-        len(SOURCE_COLUMNS)
-        * len(SOURCE_COLUMNS)
-        * len(SOURCE_COLUMNS)
-        * len(take_profit)
-        * len(stop_loss)
-    )
+    column_pairs = itertools.product(SOURCE_COLUMNS, SOURCE_COLUMNS, SOURCE_COLUMNS)
+    column_pair_len = len(SOURCE_COLUMNS) * len(SOURCE_COLUMNS) * len(SOURCE_COLUMNS)
     logger.info(f"total_combinations: {column_pair_len}")
     total_found = 0
     with PerfTimer(start_time, logger):
@@ -122,12 +108,10 @@ def backtest(
             source_column_name,
             signal_buy_column_name,
             signal_exit_column_name,
-            take_profit_multiplier,
-            stop_loss_multiplier,
         ) in alive_it(column_pairs, total=column_pair_len):
-            if 'open' not in signal_exit_column_name:
+            if "open" not in signal_exit_column_name:
                 continue
-            if 'open' not in source_column_name:
+            if "open" not in source_column_name:
                 continue
 
             kernel_conf = KernelConfig(
@@ -135,8 +119,6 @@ def backtest(
                 signal_exit_column=signal_exit_column_name,
                 source_column=source_column_name,
                 wma_period=chart_config.wma_period,
-                take_profit=take_profit_multiplier,
-                stop_loss=stop_loss_multiplier,
             )
             df = kernel(
                 orig_df.copy(),
@@ -156,23 +138,26 @@ def backtest(
                 total_found += 1
 
             if rec.exit_total > best_rec.exit_total:
+                min_exit_value = round(df["exit_value"].min(), 5)
+                max_exit_value = round(df["exit_value"].max(), 5)
                 logger.debug(
-                    "new max found q:%s w:%s l:%s %s",
+                    "new max found q:%s w:%s l:%s min:%s max:%s %s",
                     rec.exit_total,
                     rec.wins,
                     rec.losses,
+                    min_exit_value,
+                    max_exit_value,
                     kernel_conf,
                 )
                 best_rec = rec
                 best_conf = kernel_conf
                 best_df = df.copy()
 
-    
     logger.info("total_found: %s", total_found)
     if total_found == 0:
         logger.error("no combinations found")
         return None
-    
+
     logger.debug(
         "best max found %s %s",
         best_conf,
@@ -181,8 +166,8 @@ def backtest(
     report(
         best_df,
         chart_config.instrument,
-        best_conf.signal_buy_column, # type: ignore
-        best_conf.signal_exit_column, # type: ignore
+        best_conf.signal_buy_column,  # type: ignore
+        best_conf.signal_exit_column,  # type: ignore
         length=10,
     )
 

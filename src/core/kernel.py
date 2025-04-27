@@ -4,13 +4,10 @@ from dataclasses import dataclass
 import talib
 import pandas as pd
 
-from core.chart import heikin_ashi
 from core.calc import (
     entry_price,
     exit_total,
-    take_profit,
     atr,
-    stop_loss as sl,
 )
 
 
@@ -22,12 +19,10 @@ class KernelConfig:
     signal_exit_column: str
     source_column: str
     wma_period: int = 20
-    take_profit: float = 0
-    stop_loss: float = 0
 
     def __str__(self):
         """Return a string representation of the SignalConfig object."""
-        return f"so:{self.source_column}, sib:{self.signal_buy_column}, sie:{self.signal_exit_column}, sl:{self.stop_loss}, tp:{self.take_profit}"
+        return f"so:{self.source_column}, sib:{self.signal_buy_column}, sie:{self.signal_exit_column}"
 
 
 def wma_signals(
@@ -81,9 +76,10 @@ def wma_signals(
 
     if signal_buy_column != signal_exit_column:
         # check if the exit column is less than the wma
-        df.loc[(df[signal_exit_column] < df["wma"]) & (df["trigger"] != 1), "signal"] = 0
+        df.loc[
+            (df[signal_exit_column] < df["wma"]) & (df["trigger"] != 1), "signal"
+        ] = 0
         df["trigger"] = df["signal"].diff().fillna(0).astype(int)
-
 
 
 def kernel(
@@ -119,7 +115,6 @@ def kernel(
         df = df.copy()
 
     # calculate the ATR for the trailing stop loss
-    heikin_ashi(df)
     atr(df, config.wma_period)
 
     # signal using the close prices
@@ -137,21 +132,6 @@ def kernel(
 
     # calculate the entry prices:
     entry_price(df)
-
-    # for internally managed take profits
-    if config.take_profit > 0:
-        take_profit(
-            df,
-            config.take_profit,
-        )
-        entry_price(df)
-
-    if config.stop_loss > 0:
-        sl(
-            df,
-            config.stop_loss,
-        )
-        entry_price(df)
 
     # calculate the exit total
     exit_total(df)
