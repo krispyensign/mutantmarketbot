@@ -16,7 +16,7 @@ from core.calc import (
 import numpy as np
 from numpy.typing import NDArray
 from numba import jit  # type: ignore
-EDGE = False
+EDGE = True
 
 ASK_COLUMN = "ask_close" 
 BID_COLUMN = "bid_open" if EDGE else "bid_close"
@@ -124,6 +124,7 @@ def kernel_stage_1(  # noqa: PLR0913
         signal,
         trigger,
     )
+
     # for internally managed take profits
     if take_profit_conf > 0:
         signal, trigger = take_profit(
