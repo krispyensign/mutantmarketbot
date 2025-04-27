@@ -62,7 +62,7 @@ def wma_signals(
     return signals, trigger
 
 @jit(nopython=True)
-def kernel_stage_1(
+def kernel_stage_1(  # noqa: PLR0913
     buy_data: NDArray[Any],
     exit_data: NDArray[Any],
     wma_data: NDArray[Any],
@@ -72,6 +72,38 @@ def kernel_stage_1(
     take_profit_conf: float,
     stop_loss_conf: float,
 ):
+    """Perform the first stage of the kernel.
+
+    This function takes in arrays of high and low prices, a weighted moving average
+    (wma) array, ask and bid prices, average true range (atr), and take profit and
+    stop loss values. It then generates trading signals using the wma and prices,
+    calculates the entry prices, and applies any take profit or stop loss strategies.
+
+    Parameters
+    ----------
+    buy_data : NDArray[Any]
+        The array of high prices.
+    exit_data : NDArray[Any]
+        The array of low prices.
+    wma_data : NDArray[Any]
+        The array of weighted moving average (wma) values.
+    ask_data : NDArray[Any]
+        The array of ask prices.
+    bid_data : NDArray[Any]
+        The array of bid prices.
+    atr : NDArray[Any]
+        The array of average true range (atr) values.
+    take_profit_conf : float
+        The take profit value as a multiplier of the atr.
+    stop_loss_conf : float
+        The stop loss value as a multiplier of the atr.
+
+    Returns
+    -------
+    tuple[NDArray[Any], NDArray[Any], NDArray[Any]]
+        A tuple containing the signal, trigger, and position value arrays.
+
+    """
     # signal using the close prices
     # signal and trigger interval could appears as this:
     # 0 0 1 1 1 0 0 - 1 above or 0 below the wma
@@ -192,54 +224,17 @@ def kernel(
     )
     df["wma"] = talib.WMA(df[config.source_column].to_numpy(), config.wma_period)
 
-    # signal using the close prices
-    # signal and trigger interval could appears as this:
-    # 0 0 1 1 1 0 0 - 1 above or 0 below the wma
-    # 0 0 1 0 0 -1 0 - diff gives actual trigger
-    # NOTE: usage of close prices differs online than in offline trading
-    df["signal"], df["trigger"] = wma_signals(
+    # calculate the entry and exit signals
+    df["signal"], df["trigger"], df["position_value"] = kernel_stage_1(
         df[config.signal_buy_column].to_numpy(),
         df[config.signal_exit_column].to_numpy(),
         df["wma"].to_numpy(),
-    )
-
-    # calculate the entry prices:
-    df["internal_bit_mask"], df["entry_price"], df["position_value"] = entry_price(
         df[ASK_COLUMN].to_numpy(),
         df[BID_COLUMN].to_numpy(),
-        df["signal"].to_numpy(),
-        df["trigger"].to_numpy(),
+        df["atr"].to_numpy(),
+        config.take_profit,
+        config.stop_loss,
     )
-
-    # for internally managed take profits
-    if config.take_profit > 0:
-        df["signal"], df["trigger"] = take_profit(
-            df["position_value"].to_numpy(),
-            df["atr"].to_numpy(),
-            df["signal"].to_numpy(),
-            df["trigger"].to_numpy(),
-            config.take_profit,
-        )
-        df["internal_bit_mask"], df["entry_price"], df["position_value"] = entry_price(
-            df[ASK_COLUMN].to_numpy(),
-            df[BID_COLUMN].to_numpy(),
-            df["signal"].to_numpy(),
-            df["trigger"].to_numpy(),
-        )
-
-    if config.stop_loss > 0:
-        df["signal"], df["trigger"] = sl(
-            df["position_value"].to_numpy(),
-            df["atr"].to_numpy(),
-            df["signal"].to_numpy(),
-            config.stop_loss,
-        )
-        df["internal_bit_mask"], df["entry_price"], df["position_value"] = entry_price(
-            df[ASK_COLUMN].to_numpy(),
-            df[BID_COLUMN].to_numpy(),
-            df["signal"].to_numpy(),
-            df["trigger"].to_numpy(),
-        )
 
     # calculate the exit total
     exit_total(df)

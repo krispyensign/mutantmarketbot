@@ -73,9 +73,7 @@ def take_profit(
 
     """
     take_profit_array = take_profit_value * atr
-    for i in range(len(position_value)):
-        if position_value[i] > take_profit_array[i] and trigger[i] != 1:
-            signal[i] = 0
+    signal = np.where((position_value > take_profit_array) & (trigger != 1) , 0, signal)
     trigger = np.diff(signal).astype(np.int64)
     trigger = np.concatenate((np.zeros(1) , trigger))
     return signal, trigger
@@ -113,9 +111,7 @@ def stop_loss(
 
     """
     stop_loss_array = stop_loss_value * atr
-    for i in range(len(position_value)):
-        if position_value[i] < stop_loss_array[i]:
-            signal[i] = 0
+    signal = np.where(position_value < stop_loss_array, 0, signal)
     trigger = np.diff(signal).astype(np.int64)
     trigger = np.concatenate((np.zeros(1) , trigger))
     return signal, trigger
