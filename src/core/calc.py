@@ -1,8 +1,11 @@
 """Functions for calculating trading signals."""
 
+from typing import Any
 import pandas as pd
 import numpy as np
+from numpy.typing import NDArray
 import talib
+from numba import jit  # type: ignore
 
 ASK_COLUMN = "ask_close"
 BID_COLUMN = "bid_close"
@@ -101,6 +104,60 @@ def stop_loss(df: pd.DataFrame, stop_loss: float) -> None:
     df["trigger"] = df["signal"].diff().fillna(0).astype(int)
 
 
+@jit(nopython=True)
+def forward_fill(arr: NDArray) -> NDArray:
+    """Forward fills NaN values in a 1D NumPy array.
+
+    Parameters
+    ----------
+    arr : np.ndarray
+        A 1D NumPy array containing potentially NaN values.
+
+    Returns
+    -------
+        np.ndarray: A new 1D NumPy array with NaN values forward filled.
+
+    """
+    last_valid = np.nan
+    result = np.empty_like(arr)
+    for i in range(arr.shape[0]):
+        if not np.isnan(arr[i]):
+            last_valid = arr[i]
+        result[i] = last_valid
+    return result
+
+
+@jit(nopython=True)
+def entry_price_numpy(
+    entry: NDArray[Any], exit: NDArray[Any], signal: NDArray[Any], trigger: NDArray[Any]
+) -> tuple[NDArray[Any], NDArray[Any], NDArray[Any]]:
+    """Calculate the entry price for a given trading signal.
+
+    Parameters
+    ----------
+    entry : np.ndarray
+        The entry price array.
+    exit : np.ndarray
+        The exit price array.
+    signal : np.ndarray
+        The signal array.
+    trigger : np.ndarray
+        The trigger array.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray, np.ndarray]
+        A tuple containing the entry price, exit price, and position value arrays.
+
+    """
+    internal_bit_mask = np.logical_or(signal, trigger)
+    entry_price = np.where(trigger == 1, entry, np.nan)
+    entry_price = forward_fill(entry_price) * internal_bit_mask
+    position_value = (exit - entry_price) * internal_bit_mask
+
+    return internal_bit_mask, entry_price, position_value
+
+
 def entry_price(df: pd.DataFrame) -> None:
     """Calculate the entry price for a given trading signal.
 
@@ -133,7 +190,9 @@ def entry_price(df: pd.DataFrame) -> None:
     """
     df["internal_bit_mask"] = df["signal"] | abs(df["trigger"])
     df["entry_price"] = np.where(df["trigger"] == 1, df[ASK_COLUMN], np.nan)
-    df["entry_price"] = df["entry_price"].ffill() * df["internal_bit_mask"]
+    df["entry_price"] = (
+        forward_fill(df["entry_price"].to_numpy()) * df["internal_bit_mask"]
+    )
     df["position_value"] = (df[BID_COLUMN] - df["entry_price"]) * df[
         "internal_bit_mask"
     ]

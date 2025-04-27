@@ -4,14 +4,16 @@ from dataclasses import dataclass
 import talib
 import pandas as pd
 
-from core.chart import heikin_ashi
+from core.chart import heiken_ashi_numpy
 from core.calc import (
-    entry_price,
+    entry_price_numpy,
     exit_total,
     take_profit,
-    atr,
     stop_loss as sl,
 )
+
+ASK_COLUMN = "ask_close"
+BID_COLUMN = "bid_close"
 
 
 @dataclass
@@ -119,9 +121,41 @@ def kernel(
     else:
         df = df.copy()
 
+    # calculate the Heikin-Ashi candlesticks
+    df["ha_open"], df["ha_high"], df["ha_low"], df["ha_close"] = heiken_ashi_numpy(
+        df["open"].to_numpy(),
+        df["high"].to_numpy(),
+        df["low"].to_numpy(),
+        df["close"].to_numpy(),
+    )
+
+    # calculate the Heikin-Ashi candlesticks for the bid prices
+    df["ha_bid_open"], df["ha_bid_high"], df["ha_bid_low"], df["ha_bid_close"] = (
+        heiken_ashi_numpy(
+            df["bid_open"].to_numpy(),
+            df["bid_high"].to_numpy(),
+            df["bid_low"].to_numpy(),
+            df["bid_close"].to_numpy(),
+        )
+    )
+
+    # calculate the Heikin-Ashi candlesticks for the ask prices
+    df["ha_ask_open"], df["ha_ask_high"], df["ha_ask_low"], df["ha_ask_close"] = (
+        heiken_ashi_numpy(
+            df["ask_open"].to_numpy(),
+            df["ask_high"].to_numpy(),
+            df["ask_low"].to_numpy(),
+            df["ask_close"].to_numpy(),
+        )
+    )
+    
     # calculate the ATR for the trailing stop loss
-    heikin_ashi(df)
-    atr(df, config.wma_period)
+    df["atr"] = talib.ATR(
+        df["high"].to_numpy(),
+        df["low"].to_numpy(),
+        df["close"].to_numpy(),
+        timeperiod=config.wma_period,
+    )
 
     # signal using the close prices
     # signal and trigger interval could appears as this:
@@ -137,7 +171,14 @@ def kernel(
     )
 
     # calculate the entry prices:
-    entry_price(df)
+    df["internal_bit_mask"], df["entry_price"], df["position_value"] = (
+        entry_price_numpy(
+            df[ASK_COLUMN].to_numpy(),
+            df[BID_COLUMN].to_numpy(),
+            df["signal"].to_numpy(),
+            df["trigger"].to_numpy(),
+        )
+    )
 
     # for internally managed take profits
     if config.take_profit > 0:
@@ -145,14 +186,28 @@ def kernel(
             df,
             config.take_profit,
         )
-        entry_price(df)
+        df["internal_bit_mask"], df["entry_price"], df["position_value"] = (
+            entry_price_numpy(
+                df[ASK_COLUMN].to_numpy(),
+                df[BID_COLUMN].to_numpy(),
+                df["signal"].to_numpy(),
+                df["trigger"].to_numpy(),
+            )
+        )
 
     if config.stop_loss > 0:
         sl(
             df,
             config.stop_loss,
         )
-        entry_price(df)
+        df["internal_bit_mask"], df["entry_price"], df["position_value"] = (
+            entry_price_numpy(
+                df[ASK_COLUMN].to_numpy(),
+                df[BID_COLUMN].to_numpy(),
+                df["signal"].to_numpy(),
+                df["trigger"].to_numpy(),
+            )
+        )
 
     # calculate the exit total
     exit_total(df)
