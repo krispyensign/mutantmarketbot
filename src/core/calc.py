@@ -6,10 +6,6 @@ import numpy as np
 from numpy.typing import NDArray
 from numba import jit  # type: ignore
 
-ASK_COLUMN = "ask_close"
-BID_COLUMN = "bid_close"
-
-
 def exit_total(df: pd.DataFrame) -> None:
     """Calculate the cumulative total of all trades and the running total of the portfolio.
 

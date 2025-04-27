@@ -16,9 +16,10 @@ from core.calc import (
 import numpy as np
 from numpy.typing import NDArray
 from numba import jit  # type: ignore
+EDGE = False
 
-ASK_COLUMN = "ask_close"
-BID_COLUMN = "bid_close"
+ASK_COLUMN = "ask_close" 
+BID_COLUMN = "bid_open" if EDGE else "bid_close"
 
 
 @dataclass

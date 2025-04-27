@@ -12,7 +12,7 @@ from alive_progress import alive_it  # type: ignore
 from bot.constants import (
     SOURCE_COLUMNS,
 )
-from core.kernel import KernelConfig, kernel
+from core.kernel import KernelConfig, kernel, EDGE
 from bot.exchange import (
     getOandaOHLC,
     OandaContext,
@@ -85,7 +85,7 @@ class ChartConfig:
     wma_period: int
 
 
-def backtest(
+def backtest(  # noqa: C901
     chart_config: ChartConfig,
     token: str,
     take_profit: list[float] = [0.0],
@@ -158,6 +158,11 @@ def backtest(
             take_profit_multiplier,
             stop_loss_multiplier,
         ) in alive_it(column_pairs, total=column_pair_len):
+            if EDGE:
+                if 'open' not in source_column_name:
+                    continue
+                if 'open' not in signal_exit_column_name:
+                    continue
             kernel_conf = KernelConfig(
                 signal_buy_column=signal_buy_column_name,
                 signal_exit_column=signal_exit_column_name,
@@ -198,8 +203,9 @@ def backtest(
             total_found += 1
             if rec.exit_total > best_rec.exit_total:
                 logger.debug(
-                    "new max found q:%s w:%s l:%s %s",
+                    "new max found q:%s q10:%s w:%s l:%s %s",
                     round(rec.exit_total, 5),
+                    round(sample_rec.exit_total, 5),
                     rec.wins,
                     rec.losses,
                     kernel_conf,
