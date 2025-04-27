@@ -172,11 +172,23 @@ def backtest(
 
             rec = round(df.iloc[-1], 5)
 
-            if rec.wins == 0:
-                continue
-            else:
-                total_found += 1
 
+            if rec.wins == 0 or rec.exit_total < 0:
+                continue
+
+            # copy the df and only keep the latest 10% of rows
+            orig_sample_df = orig_df.copy().iloc[-int(chart_config.candle_count * 0.1) :]
+            df_sample = kernel(
+                orig_sample_df,
+                include_incomplete=False,
+                config=kernel_conf,
+            )
+            sample_rec = round(df_sample.iloc[-1], 5)
+
+            if sample_rec.wins == 0 or sample_rec.exit_total < 0:
+                continue
+
+            total_found += 1
             if rec.exit_total > best_rec.exit_total:
                 logger.debug(
                     "new max found q:%s w:%s l:%s %s",
