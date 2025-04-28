@@ -5,8 +5,6 @@ import pandas as pd
 import logging
 
 
-logger = logging.getLogger("reporting")
-
 ENTRY_COLUMN = "ask_close"
 EXIT_COLUMN = "bid_open"
 
@@ -34,6 +32,7 @@ def report(
         The number of rows to print, by default 2
 
     """
+    logger = logging.getLogger("reporting")
     df_ticks = df.reset_index()[
         [
             "signal",

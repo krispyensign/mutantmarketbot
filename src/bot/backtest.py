@@ -22,7 +22,6 @@ import logging
 
 from bot.reporting import report
 
-logger = logging.getLogger("backtest")
 APP_START_TIME = datetime.now()
 
 
@@ -35,6 +34,7 @@ def get_git_info() -> tuple[str, bool] | None:
 
     If there is an error (e.g., not in a Git repository), the function returns None.
     """
+    logger = logging.getLogger("backtest")
     try:
         # Get commit hash
         commit_hash = subprocess.check_output(
@@ -112,6 +112,7 @@ def backtest(  # noqa: C901, PLR0915
     printed to the log file.
 
     """
+    logger = logging.getLogger("backtest")
     logger.info("starting backtest")
     git_info = get_git_info()
     if git_info is None:
@@ -162,7 +163,9 @@ def backtest(  # noqa: C901, PLR0915
             if chart_config.edge:
                 if "open" not in source_column_name:
                     continue
-                if "open" not in signal_exit_column_name:
+                if "low" not in signal_exit_column_name:
+                    continue
+                if "high" not in signal_buy_column_name:
                     continue
 
             kernel_conf = KernelConfig(

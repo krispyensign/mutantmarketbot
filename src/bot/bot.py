@@ -19,7 +19,6 @@ from bot.exchange import (
     OandaContext,
 )
 
-logger = logging.getLogger("bot")
 APP_START_TIME = datetime.now()
 FRIDAY = 5
 SUNDAY = 7
@@ -130,6 +129,7 @@ def bot(  # noqa: PLR0913
         Whether to observe only. The default is False.
 
     """
+    logger = logging.getLogger("bot")
     logger.info("starting bot.")
 
     if not observe_only:
@@ -203,6 +203,7 @@ def sleep_until_next_5_minute(trade_id: int = -1):
     next_time = roundUp(now)
     if (next_time - now) < timedelta(seconds=1):
         next_time = next_time + timedelta(minutes=5)
+    logger = logging.getLogger("bot")
     logger.info(
         "sleeping until next 5 minute interval %s",
         next_time.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
