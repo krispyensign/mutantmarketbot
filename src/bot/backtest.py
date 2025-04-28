@@ -86,7 +86,7 @@ class ChartConfig:
     edge: bool
 
 
-def backtest(  # noqa: C901
+def backtest(  # noqa: C901, PLR0915
     chart_config: ChartConfig,
     token: str,
     take_profit: list[float] = [0.0],
@@ -163,6 +163,10 @@ def backtest(  # noqa: C901
                 if "open" not in source_column_name:
                     continue
                 if "open" not in signal_exit_column_name:
+                    continue
+                if take_profit_multiplier != 0.0:
+                    continue
+                if stop_loss_multiplier != 0.0:
                     continue
 
             kernel_conf = KernelConfig(
