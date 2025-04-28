@@ -40,21 +40,46 @@ class KernelConfig:
 
 
 @jit(nopython=True)
-def wma_signals(
+def wma_deterministic_signals(
     buy_data: NDArray[Any],
     exit_data: NDArray[Any],
     wma_data: NDArray[Any],
 ) -> tuple[NDArray[Any], NDArray[Any]]:
-    """Generate trading signals based on a comparison highs and lows to the wma."""
-    signals = np.where(buy_data > wma_data, 1, 0)
-    trigger = np.diff(signals).astype(np.int64)
+    """Calculate the weighted moving average."""
+    signals = np.where((buy_data > wma_data), 1, 0)
+    trigger = np.diff(signals)
     trigger = np.concatenate((np.zeros(1), trigger))
 
     signals = np.where((exit_data < wma_data) & (trigger != 1), 0, signals)
-    trigger = np.diff(signals).astype(np.int64)
+    trigger = np.diff(signals)
     trigger = np.concatenate((np.zeros(1), trigger))
 
-    return signals, trigger
+    return signals.astype(np.int64), trigger.astype(np.int64)
+
+
+@jit(nopython=True)
+def wma_signals_buy_exit(
+    buy_data: NDArray[Any],
+    exit_data: NDArray[Any],
+    wma_data: NDArray[Any],
+) -> tuple[NDArray[np.int64], NDArray[np.int64]]:
+    """Generate trading signals based on a comparison highs and lows to the wma."""
+    signals = np.zeros(len(buy_data))
+
+    for i in range(1, len(buy_data)):
+        if buy_data[i] > wma_data[i]:
+            signals[i] = 1
+        elif signals[i - 1] == 1 and exit_data[i] > wma_data[i]:
+            signals[i] = 1
+        elif signals[i - 1] == 1 and exit_data[i] <= wma_data[i]:
+            signals[i] = 0
+        else:
+            signals[i] = 0
+
+    trigger = np.diff(signals)
+    trigger = np.concatenate((np.zeros(1), trigger)).astype(np.int64)
+
+    return signals.astype(np.int64), trigger.astype(np.int64)
 
 
 @jit(nopython=True)
@@ -65,8 +90,9 @@ def kernel_stage_1(  # noqa: PLR0913
     ask_data: NDArray[Any],
     bid_data: NDArray[Any],
     atr: NDArray[Any],
-    take_profit_conf: float,
-    stop_loss_conf: float,
+    take_profit_conf: np.float64,
+    stop_loss_conf: np.float64,
+    edge: bool,
 ):
     """Perform the first stage of the kernel.
 
@@ -93,6 +119,10 @@ def kernel_stage_1(  # noqa: PLR0913
         The take profit value as a multiplier of the atr.
     stop_loss_conf : float
         The stop loss value as a multiplier of the atr.
+    buy_only : bool
+        If True, only buy signals are generated.
+    edge : bool
+        If True, edge trading is enabled.
 
     Returns
     -------
@@ -105,14 +135,21 @@ def kernel_stage_1(  # noqa: PLR0913
     # 0 0 1 1 1 0 0 - 1 above or 0 below the wma
     # 0 0 1 0 0 -1 0 - diff gives actual trigger
     # NOTE: usage of close prices differs online than in offline trading
-    signal, trigger = wma_signals(
-        buy_data,
-        exit_data,
-        wma_data,
-    )
+    if edge:
+        signal, trigger = wma_signals_buy_exit(
+            buy_data,
+            exit_data,
+            wma_data,
+        )
+    else:
+        signal, trigger = wma_deterministic_signals(
+            buy_data,
+            exit_data,
+            wma_data,
+        )
 
     # calculate the entry prices:
-    _, _, position_value = entry_price(
+    position_value = entry_price(
         ask_data,
         bid_data,
         signal,
@@ -128,7 +165,7 @@ def kernel_stage_1(  # noqa: PLR0913
             trigger,
             take_profit_conf,
         )
-        _, _, position_value = entry_price(
+        position_value = entry_price(
             ask_data,
             bid_data,
             signal,
@@ -142,7 +179,7 @@ def kernel_stage_1(  # noqa: PLR0913
             signal,
             stop_loss_conf,
         )
-        _, _, position_value = entry_price(
+        position_value = entry_price(
             ask_data,
             bid_data,
             signal,
@@ -237,6 +274,7 @@ def kernel(
         df["atr"].to_numpy(),
         config.take_profit,
         config.stop_loss,
+        config.edge,
     )
 
     # calculate the exit total
