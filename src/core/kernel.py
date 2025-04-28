@@ -177,7 +177,6 @@ def kernel_stage_1(  # noqa: PLR0913
             position_value,
             atr,
             signal,
-            trigger,
             stop_loss_conf,
         )
         position_value = entry_price(
