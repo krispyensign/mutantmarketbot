@@ -163,9 +163,13 @@ def backtest(  # noqa: C901, PLR0915
             if chart_config.edge:
                 if "open" not in source_column_name:
                     continue
-                if "low" not in signal_exit_column_name:
+                if "open" not in signal_exit_column_name:
                     continue
-                if "high" not in signal_buy_column_name:
+                if "open" not in signal_buy_column_name:
+                    continue
+                if take_profit_multiplier != 0.0:
+                    continue
+                if stop_loss_multiplier != 0.0:
                     continue
 
             kernel_conf = KernelConfig(
@@ -203,14 +207,15 @@ def backtest(  # noqa: C901, PLR0915
             )
             sample_rec = df_sample.iloc[-1]
 
-            if sample_rec.wins == 0 or sample_rec.exit_total < 0:
-                continue
+            # if sample_rec.wins == 0 or sample_rec.exit_total < 0:
+            #     continue
 
             total_found += 1
-            if rec.exit_total > best_rec.exit_total:
+            if rec.exit_total > best_rec.exit_total and rec.min_exit_total > best_rec.min_exit_total:
                 logger.debug(
-                    "new max found q:%s q10:%s w:%s l:%s %s",
+                    "new max found q:%s q10:%s min%s w:%s l:%s %s",
                     round(rec.exit_total, 5),
+                    round(rec.min_exit_total, 5),
                     round(sample_rec.exit_total, 5),
                     rec.wins,
                     rec.losses,
