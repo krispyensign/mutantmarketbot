@@ -18,3 +18,4 @@ pyvenv.cfg
 ticks.json
 local_configs/
 logs/
+dist/
