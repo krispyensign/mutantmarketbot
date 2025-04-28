@@ -11,8 +11,6 @@ from bot.bot import TradeConfig, bot
 from core.kernel import KernelConfig
 import os
 
-logging.root.handlers = []
-
 TOKEN = os.environ.get("OANDA_TOKEN")
 ACCOUNT_ID = os.environ.get("OANDA_ACCOUNT_ID")
 

@@ -8,7 +8,7 @@ import uuid
 import v20  # type: ignore
 import pandas as pd
 
-from bot.backtest import ChartConfig, PerfTimer
+from bot.backtest import ChartConfig, PerfTimer, get_git_info
 from core.kernel import KernelConfig, kernel
 from bot.reporting import report
 from bot.exchange import (
@@ -131,6 +131,10 @@ def bot(  # noqa: PLR0913
     """
     logger = logging.getLogger("bot")
     logger.info("starting bot.")
+    git_info = get_git_info()
+    if git_info is None:
+        logger.error("Failed to get Git info")
+        return None
 
     if not observe_only:
         sleep_until_next_5_minute(trade_id=-1)
@@ -171,6 +175,11 @@ def bot(  # noqa: PLR0913
             )
         logger.info(f"columns used: {kernel_conf}")
         logger.info(f"trade id: {trade_id}")
+        git_info = get_git_info()
+        if git_info is None:
+            logger.error("Failed to get Git info")
+            return None
+        logger.info("git info: %s %s", git_info[0], git_info[1])
         logger.info(f"run complete. {trade_conf.bot_id}")
 
         # print the results
