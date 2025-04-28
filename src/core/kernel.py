@@ -57,31 +57,6 @@ def wma_deterministic_signals(
 
 
 @jit(nopython=True)
-def wma_signals_buy_exit(
-    buy_data: NDArray[Any],
-    exit_data: NDArray[Any],
-    wma_data: NDArray[Any],
-) -> tuple[NDArray[np.int64], NDArray[np.int64]]:
-    """Generate trading signals based on a comparison highs and lows to the wma."""
-    signals = np.zeros(len(buy_data))
-
-    for i in range(1, len(buy_data)):
-        if buy_data[i] > wma_data[i]:
-            signals[i] = 1
-        elif signals[i - 1] == 1 and exit_data[i] > wma_data[i]:
-            signals[i] = 1
-        elif signals[i - 1] == 1 and exit_data[i] <= wma_data[i]:
-            signals[i] = 0
-        else:
-            signals[i] = 0
-
-    trigger = np.diff(signals)
-    trigger = np.concatenate((np.zeros(1), trigger)).astype(np.int64)
-
-    return signals.astype(np.int64), trigger.astype(np.int64)
-
-
-@jit(nopython=True)
 def kernel_stage_1(  # noqa: PLR0913
     buy_data: NDArray[Any],
     exit_data: NDArray[Any],
