@@ -11,8 +11,6 @@ handlers:
 loggers:
   numba:
     level: WARNING
-    handlers: [console]
-    propagate: no
 root:
   level: DEBUG
   handlers: [console]

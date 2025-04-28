@@ -164,10 +164,6 @@ def backtest(  # noqa: C901, PLR0915
                     continue
                 if "open" not in signal_exit_column_name:
                     continue
-                if take_profit_multiplier != 0.0:
-                    continue
-                if stop_loss_multiplier != 0.0:
-                    continue
 
             kernel_conf = KernelConfig(
                 signal_buy_column=signal_buy_column_name,

@@ -81,6 +81,7 @@ def stop_loss(
     position_value: NDArray[Any],
     atr: NDArray[Any],
     signal: NDArray[Any],
+    trigger: NDArray[Any],
     stop_loss_value: float,
 ) -> tuple[NDArray[Any], NDArray[Any]]:
     """Apply a stop loss strategy to trading signals.
@@ -98,6 +99,8 @@ def stop_loss(
         Numpy array containing the average true range values.
     signal : NDArray[Any]
         Numpy array containing the trading signals.
+    trigger : NDArray[Any]
+        Numpy array containing the trigger values.
     stop_loss_value : float
         The stop loss value as a multiplier of the atr.
 
@@ -108,7 +111,7 @@ def stop_loss(
 
     """
     stop_loss_array = stop_loss_value * atr
-    signal = np.where(position_value < stop_loss_array, 0, signal)
+    signal = np.where((position_value < stop_loss_array) & (trigger != 1), 0, signal)
     trigger = np.diff(signal)
     trigger = np.concatenate((np.zeros(1), trigger))
     return signal.astype(np.int64), trigger.astype(np.int64)
