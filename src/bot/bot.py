@@ -27,8 +27,6 @@ FIVE_PM = 21
 HALF_MINUTE = 30
 
 
-# TODO: have a edge bot and a det bot.
-
 @dataclass
 class TradeConfig:
     """Configuration for the bot."""
