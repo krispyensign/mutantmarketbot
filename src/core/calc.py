@@ -6,9 +6,6 @@ import numpy as np
 from numpy.typing import NDArray
 from numba import jit  # type: ignore
 
-ASK_COLUMN = "ask_close"
-BID_COLUMN = "bid_close"
-
 
 def exit_total(df: pd.DataFrame) -> None:
     """Calculate the cumulative total of all trades and the running total of the portfolio.
@@ -160,7 +157,7 @@ def entry_price(
     Returns
     -------
     tuple[np.ndarray, np.ndarray, np.ndarray]
-        A tuple containing the entry price, exit price, and position value arrays.
+        A tuple containing the internal bit mask, exit price, and position value arrays.
 
     """
     internal_bit_mask = np.logical_or(signal, trigger)

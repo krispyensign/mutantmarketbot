@@ -56,7 +56,7 @@ def bot_run(  # noqa: PLR0911
     recent_last_time = datetime.fromisoformat(df.iloc[-1]["timestamp"])
     df = kernel(
         df,
-        include_incomplete=False,
+        include_incomplete=True,
         config=kernel_conf,
     )
 
@@ -74,12 +74,16 @@ def bot_run(  # noqa: PLR0911
         return trade_id, df, None
 
     # check if the current time is greater than the recent last time
-    if (current_time - recent_last_time).total_seconds() > HALF_MINUTE:
+    use_edge = (trade_id != -1) and kernel_conf.edge is True
+    if not use_edge and (current_time - recent_last_time).total_seconds() > HALF_MINUTE:
         return trade_id, df, Exception(f"curr:{current_time} last:{recent_last_time}")
 
     # place order
     try:
-        rec = df.iloc[-1]
+        if use_edge:
+            rec = df.iloc[-1]
+        else:
+            rec = df.iloc[-2]
         if rec.trigger == 1 and trade_id == -1:
             trade_id = place_order(
                 ctx,
@@ -182,7 +186,10 @@ def bot(  # noqa: PLR0913
         if observe_only:
             break
 
-        sleep_until_next_5_minute(trade_id=trade_id)
+        if trade_id == -1 and kernel_conf.edge:
+            sleep(1)
+        else:
+            sleep_until_next_5_minute(trade_id=trade_id)
 
 
 def roundUp(dt):

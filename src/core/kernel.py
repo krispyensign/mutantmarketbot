@@ -19,6 +19,7 @@ from numba import jit  # type: ignore
 
 ASK_COLUMN = "ask_close"
 BID_COLUMN = "bid_close"
+EDGE_BID_COLUMN = "bid_open"
 
 
 @dataclass
@@ -28,13 +29,14 @@ class KernelConfig:
     signal_buy_column: str
     signal_exit_column: str
     source_column: str
+    edge: bool
     wma_period: int = 20
     take_profit: float = 0
     stop_loss: float = 0
 
     def __str__(self):
         """Return a string representation of the SignalConfig object."""
-        return f"so:{self.source_column}, sib:{self.signal_buy_column}, sie:{self.signal_exit_column}, sl:{self.stop_loss}, tp:{self.take_profit}"
+        return f"edge:{self.edge}, so:{self.source_column}, sib:{self.signal_buy_column}, sie:{self.signal_exit_column}, sl:{self.stop_loss}, tp:{self.take_profit}"
 
 
 @jit(nopython=True)
@@ -43,19 +45,12 @@ def wma_signals(
     exit_data: NDArray[Any],
     wma_data: NDArray[Any],
 ) -> tuple[NDArray[Any], NDArray[Any]]:
-    """Generate trading signals based on a comparison of the Heikin-Ashi highs and lows to the wma."""
-    signals = np.zeros(len(buy_data)).astype(np.int64)
+    """Generate trading signals based on a comparison highs and lows to the wma."""
+    signals = np.where(buy_data > wma_data, 1, 0)
+    trigger = np.diff(signals).astype(np.int64)
+    trigger = np.concatenate((np.zeros(1), trigger))
 
-    # Generate signals using numpy
-    buy_signals = buy_data > wma_data
-    exit_signals = exit_data < wma_data
-
-    for i in range(1, len(signals)):
-        if buy_signals[i]:
-            signals[i] = 1
-        elif exit_signals[i] and signals[i - 1] != 1:
-            signals[i] = 0
-
+    signals = np.where((exit_data < wma_data) & (trigger != 1), 0, signals)
     trigger = np.diff(signals).astype(np.int64)
     trigger = np.concatenate((np.zeros(1), trigger))
 
@@ -123,6 +118,7 @@ def kernel_stage_1(  # noqa: PLR0913
         signal,
         trigger,
     )
+
     # for internally managed take profits
     if take_profit_conf > 0:
         signal, trigger = take_profit(
@@ -231,12 +227,13 @@ def kernel(
     df["wma"] = talib.WMA(df[config.source_column].to_numpy(), config.wma_period)
 
     # calculate the entry and exit signals
+    bid_name = EDGE_BID_COLUMN if config.edge else BID_COLUMN
     df["signal"], df["trigger"], df["position_value"] = kernel_stage_1(
         df[config.signal_buy_column].to_numpy(),
         df[config.signal_exit_column].to_numpy(),
         df["wma"].to_numpy(),
         df[ASK_COLUMN].to_numpy(),
-        df[BID_COLUMN].to_numpy(),
+        df[bid_name].to_numpy(),
         df["atr"].to_numpy(),
         config.take_profit,
         config.stop_loss,

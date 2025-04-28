@@ -83,9 +83,10 @@ class ChartConfig:
     granularity: str
     candle_count: int
     wma_period: int
+    edge: bool
 
 
-def backtest(
+def backtest(  # noqa: C901, PLR0915
     chart_config: ChartConfig,
     token: str,
     take_profit: list[float] = [0.0],
@@ -158,6 +159,16 @@ def backtest(
             take_profit_multiplier,
             stop_loss_multiplier,
         ) in alive_it(column_pairs, total=column_pair_len):
+            if chart_config.edge:
+                if "open" not in source_column_name:
+                    continue
+                if "open" not in signal_exit_column_name:
+                    continue
+                if take_profit_multiplier != 0.0:
+                    continue
+                if stop_loss_multiplier != 0.0:
+                    continue
+
             kernel_conf = KernelConfig(
                 signal_buy_column=signal_buy_column_name,
                 signal_exit_column=signal_exit_column_name,
@@ -165,6 +176,7 @@ def backtest(
                 wma_period=chart_config.wma_period,
                 take_profit=take_profit_multiplier,
                 stop_loss=stop_loss_multiplier,
+                edge=chart_config.edge,
             )
             df = kernel(
                 orig_df.copy(),
@@ -198,8 +210,9 @@ def backtest(
             total_found += 1
             if rec.exit_total > best_rec.exit_total:
                 logger.debug(
-                    "new max found q:%s w:%s l:%s %s",
+                    "new max found q:%s q10:%s w:%s l:%s %s",
                     round(rec.exit_total, 5),
+                    round(sample_rec.exit_total, 5),
                     rec.wins,
                     rec.losses,
                     kernel_conf,
