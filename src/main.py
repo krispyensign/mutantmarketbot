@@ -1,6 +1,7 @@
 """Main module."""
 
 import logging
+import logging.config
 import sys
 
 import yaml
@@ -26,31 +27,24 @@ USAGE = """
       """
 
 
-def get_logger(file_name: str):
-    """Get logger for main module."""
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format="%(asctime)s|%(levelname)s|%(name)s|%(message)s",
-        handlers=[logging.FileHandler(file_name), logging.StreamHandler()],
-    )
-    logger = logging.getLogger("main")
-    # logger.addHandler(logging.FileHandler())
-    numba_logger = logging.getLogger("numba")
-    numba_logger.setLevel(logging.WARNING)
-    return logger
-
-
 if __name__ == "__main__":
     if TOKEN is None or ACCOUNT_ID is None:
         print(sys.argv)
         print(USAGE)
         sys.exit(1)
+
     if "backtest" in sys.argv[1]:
+        # load config
         instrument = sys.argv[2]
-        os.makedirs("logs", exist_ok=True)
-        logger = get_logger(f"logs/mmbot-backtest-{instrument}.log")
         conf = yaml.safe_load(open(sys.argv[3]))
         chart_conf = ChartConfig(instrument, **conf["chart_config"])
+
+        # setup logging
+        logging_conf = conf["logging"]
+        logging.config.dictConfig(logging_conf)
+        logger = logging.getLogger("main")
+
+        # configure take profit and stop loss
         tp = [0.0]
         sl = [0.0]
         if "take_profit" in conf:
@@ -58,19 +52,25 @@ if __name__ == "__main__":
         if "stop_loss" in conf:
             sl = conf["stop_loss"]
 
+        # run
         result = backtest(chart_conf, token=TOKEN, take_profit=tp, stop_loss=sl)
         logger.info(result)
         if result is None:
             sys.exit(1)
+
     elif "bot" in sys.argv[1]:
+        # load config
         conf = yaml.safe_load(open(sys.argv[2]))
         chart_conf = ChartConfig(**conf["chart_config"])
         kernel_conf = KernelConfig(**conf["kernel_config"])
         trade_conf = TradeConfig(**conf["trade_config"])
-        id = str(trade_conf.bot_id).split("-")[1]
-        instrument = chart_conf.instrument
-        os.makedirs("logs", exist_ok=True)
-        logger = get_logger(f"logs/mmbot-{instrument}-{id}.log")
+
+        # setup logging
+        logging_conf = conf["logging"]
+        logging.config.dictConfig(logging_conf)
+        logger = logging.getLogger("main")
+
+        # run
         if "observe" in sys.argv:
             observe_only = True
         else:
