@@ -12,7 +12,7 @@ from alive_progress import alive_it  # type: ignore
 from bot.constants import (
     SOURCE_COLUMNS,
 )
-from core.kernel import KernelConfig, kernel, EDGE
+from core.kernel import KernelConfig, kernel
 from bot.exchange import (
     getOandaOHLC,
     OandaContext,
@@ -83,6 +83,7 @@ class ChartConfig:
     granularity: str
     candle_count: int
     wma_period: int
+    edge: bool
 
 
 def backtest(  # noqa: C901
@@ -158,7 +159,7 @@ def backtest(  # noqa: C901
             take_profit_multiplier,
             stop_loss_multiplier,
         ) in alive_it(column_pairs, total=column_pair_len):
-            if EDGE:
+            if chart_config.edge:
                 if "open" not in source_column_name:
                     continue
                 if "open" not in signal_exit_column_name:
@@ -171,6 +172,7 @@ def backtest(  # noqa: C901
                 wma_period=chart_config.wma_period,
                 take_profit=take_profit_multiplier,
                 stop_loss=stop_loss_multiplier,
+                edge=chart_config.edge,
             )
             df = kernel(
                 orig_df.copy(),

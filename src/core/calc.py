@@ -157,7 +157,7 @@ def entry_price(
     Returns
     -------
     tuple[np.ndarray, np.ndarray, np.ndarray]
-        A tuple containing the entry price, exit price, and position value arrays.
+        A tuple containing the internal bit mask, exit price, and position value arrays.
 
     """
     internal_bit_mask = np.logical_or(signal, trigger)

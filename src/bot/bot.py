@@ -9,7 +9,7 @@ import v20  # type: ignore
 import pandas as pd
 
 from bot.backtest import ChartConfig, PerfTimer
-from core.kernel import KernelConfig, kernel, EDGE
+from core.kernel import KernelConfig, kernel
 from bot.reporting import report
 from bot.exchange import (
     close_trade,
@@ -26,8 +26,6 @@ SUNDAY = 7
 FIVE_PM = 21
 HALF_MINUTE = 30
 
-
-# TODO: have a edge bot and a det bot.
 
 @dataclass
 class TradeConfig:
@@ -55,11 +53,10 @@ def bot_run(  # noqa: PLR0911
         return -1, None, err
 
     # run kernel on candles
-    use_edge = (trade_id != -1) and EDGE is True
     recent_last_time = datetime.fromisoformat(df.iloc[-1]["timestamp"])
     df = kernel(
         df,
-        include_incomplete=use_edge,
+        include_incomplete=True,
         config=kernel_conf,
     )
 
@@ -77,16 +74,16 @@ def bot_run(  # noqa: PLR0911
         return trade_id, df, None
 
     # check if the current time is greater than the recent last time
-    if (
-        EDGE is False
-        or (EDGE is True and trade_id != -1)
-        and (current_time - recent_last_time).total_seconds() > HALF_MINUTE
-    ):
+    use_edge = (trade_id != -1) and kernel_conf.edge is True
+    if not use_edge and (current_time - recent_last_time).total_seconds() > HALF_MINUTE:
         return trade_id, df, Exception(f"curr:{current_time} last:{recent_last_time}")
 
     # place order
     try:
-        rec = df.iloc[-1]
+        if use_edge:
+            rec = df.iloc[-1]
+        else:
+            rec = df.iloc[-2]
         if rec.trigger == 1 and trade_id == -1:
             trade_id = place_order(
                 ctx,
@@ -189,7 +186,7 @@ def bot(  # noqa: PLR0913
         if observe_only:
             break
 
-        if EDGE is True and trade_id != -1:
+        if trade_id == -1 and kernel_conf.edge:
             sleep(1)
         else:
             sleep_until_next_5_minute(trade_id=trade_id)

@@ -17,10 +17,9 @@ import numpy as np
 from numpy.typing import NDArray
 from numba import jit  # type: ignore
 
-EDGE = False
-
 ASK_COLUMN = "ask_close"
-BID_COLUMN = "bid_open" if EDGE else "bid_close"
+BID_COLUMN = "bid_close"
+EDGE_BID_COLUMN = "bid_open"
 
 
 @dataclass
@@ -30,13 +29,14 @@ class KernelConfig:
     signal_buy_column: str
     signal_exit_column: str
     source_column: str
+    edge: bool
     wma_period: int = 20
     take_profit: float = 0
     stop_loss: float = 0
 
     def __str__(self):
         """Return a string representation of the SignalConfig object."""
-        return f"so:{self.source_column}, sib:{self.signal_buy_column}, sie:{self.signal_exit_column}, sl:{self.stop_loss}, tp:{self.take_profit}"
+        return f"edge:{self.edge}, so:{self.source_column}, sib:{self.signal_buy_column}, sie:{self.signal_exit_column}, sl:{self.stop_loss}, tp:{self.take_profit}"
 
 
 @jit(nopython=True)
@@ -227,12 +227,13 @@ def kernel(
     df["wma"] = talib.WMA(df[config.source_column].to_numpy(), config.wma_period)
 
     # calculate the entry and exit signals
+    bid_name = EDGE_BID_COLUMN if config.edge else BID_COLUMN
     df["signal"], df["trigger"], df["position_value"] = kernel_stage_1(
         df[config.signal_buy_column].to_numpy(),
         df[config.signal_exit_column].to_numpy(),
         df["wma"].to_numpy(),
         df[ASK_COLUMN].to_numpy(),
-        df[BID_COLUMN].to_numpy(),
+        df[bid_name].to_numpy(),
         df["atr"].to_numpy(),
         config.take_profit,
         config.stop_loss,
