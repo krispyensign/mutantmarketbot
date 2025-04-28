@@ -16,7 +16,7 @@ def report(
     instrument: str,
     signal_buy_column: str,
     signal_exit_column: str,
-    length: int = 2,
+    length: int = 3,
 ):
     """Print a report of the trading results.
 

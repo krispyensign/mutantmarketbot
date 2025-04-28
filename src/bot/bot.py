@@ -180,13 +180,13 @@ def bot(  # noqa: PLR0913
                 chart_conf.instrument,
                 kernel_conf.signal_buy_column,
                 kernel_conf.signal_exit_column,
-                length=10 if observe_only else 2,
+                length=10 if observe_only else 3,
             )
 
         if observe_only:
             break
 
-        if trade_id == -1 and kernel_conf.edge:
+        if trade_id != -1 and kernel_conf.edge:
             sleep(1)
         else:
             sleep_until_next_5_minute(trade_id=trade_id)

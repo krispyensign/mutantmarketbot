@@ -89,8 +89,8 @@ class ChartConfig:
 def backtest(  # noqa: C901, PLR0915
     chart_config: ChartConfig,
     token: str,
-    take_profit: list[float] = [0.0],
-    stop_loss: list[float] = [0.0],
+    take_profit: list[float],
+    stop_loss: list[float],
 ) -> KernelConfig | None:
     """Run a backtest of the trading strategy.
 

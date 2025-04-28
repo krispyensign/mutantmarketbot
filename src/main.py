@@ -34,6 +34,7 @@ def get_logger(file_name: str):
         handlers=[logging.FileHandler(file_name), logging.StreamHandler()],
     )
     logger = logging.getLogger("main")
+    # logger.addHandler(logging.FileHandler())
     numba_logger = logging.getLogger("numba")
     numba_logger.setLevel(logging.WARNING)
     return logger
@@ -45,8 +46,9 @@ if __name__ == "__main__":
         print(USAGE)
         sys.exit(1)
     if "backtest" in sys.argv[1]:
-        logger = get_logger("backtest.log")
         instrument = sys.argv[2]
+        os.makedirs("logs", exist_ok=True)
+        logger = get_logger(f"logs/mmbot-backtest-{instrument}.log")
         conf = yaml.safe_load(open(sys.argv[3]))
         chart_conf = ChartConfig(instrument, **conf["chart_config"])
         tp = [0.0]
@@ -61,11 +63,14 @@ if __name__ == "__main__":
         if result is None:
             sys.exit(1)
     elif "bot" in sys.argv[1]:
-        logger = get_logger("bot.log")
         conf = yaml.safe_load(open(sys.argv[2]))
         chart_conf = ChartConfig(**conf["chart_config"])
         kernel_conf = KernelConfig(**conf["kernel_config"])
         trade_conf = TradeConfig(**conf["trade_config"])
+        id = str(trade_conf.bot_id).split("-")[1]
+        instrument = chart_conf.instrument
+        os.makedirs("logs", exist_ok=True)
+        logger = get_logger(f"logs/mmbot-{instrument}-{id}.log")
         if "observe" in sys.argv:
             observe_only = True
         else:
