@@ -196,34 +196,20 @@ def backtest(  # noqa: C901, PLR0915
             if rec.wins == 0 or rec.exit_total < 0:
                 continue
 
-            # copy the df and only keep the latest 10% of rows
-            orig_sample_df = orig_df.copy().iloc[
-                -int(chart_config.candle_count * 0.1) :
-            ]
-            df_sample = kernel(
-                orig_sample_df,
-                include_incomplete=False,
-                config=kernel_conf,
-            )
-            sample_rec = df_sample.iloc[-1]
-
-            # if sample_rec.wins == 0 or sample_rec.exit_total < 0:
-            #     continue
-
             total_found += 1
-            if rec.exit_total > best_rec.exit_total and rec.min_exit_total > best_rec.min_exit_total:
-                logger.debug(
-                    "new max found q:%s q10:%s min%s w:%s l:%s %s",
-                    round(rec.exit_total, 5),
-                    round(rec.min_exit_total, 5),
-                    round(sample_rec.exit_total, 5),
-                    rec.wins,
-                    rec.losses,
-                    kernel_conf,
-                )
-                best_rec = rec
-                best_conf = kernel_conf
-                best_df = df.copy()
+            if rec.min_exit_total > best_rec.min_exit_total:
+                if rec.exit_total > best_rec.exit_total:
+                    logger.debug(
+                        "new max found q:%s qmin:%s w:%s l:%s %s",
+                        round(rec.exit_total, 5),
+                        round(rec.min_exit_total, 5),
+                        rec.wins,
+                        rec.losses,
+                        kernel_conf,
+                    )
+                    best_rec = rec
+                    best_conf = kernel_conf
+                    best_df = df.copy()
 
     logger.info("total_found: %s", total_found)
     if total_found == 0:
