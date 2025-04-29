@@ -48,7 +48,9 @@ if __name__ == "__main__":
         sl = conf["stop_loss"] if "stop_loss" in conf else [0.0]
 
         # run
-        result = backtest(chart_conf, kernel_conf, token=TOKEN, take_profit=tp, stop_loss=sl)
+        result = backtest(
+            chart_conf, kernel_conf, token=TOKEN, take_profit=tp, stop_loss=sl
+        )
         logger.info(result)
         if result is None:
             sys.exit(1)
