@@ -138,7 +138,7 @@ def backtest(  # noqa: C901, PLR0915
         chart_config.granularity,
     )
 
-    best_df = pd.DataFrame()
+    best_df: pd.DataFrame | None = None
     best_rec: pd.Series[Any] | None = None
     best_conf: KernelConfig | None = None
 
@@ -192,17 +192,16 @@ def backtest(  # noqa: C901, PLR0915
             if rec.wins == 0 or rec.exit_total < 0:
                 continue
 
-            min_running_total = df["running_total"].min()
-            best_min_running_total = best_df["running_total"].min()
             total_found += 1
             if (
-                min_running_total > best_min_running_total
+                df.exit_value.min() >= best_df.exit_value.min()
                 and rec.exit_total > best_rec.exit_total
             ):
                 logger.debug(
-                    "new max found q:%s qmin:%s w:%s l:%s %s",
+                    "new max found q:%s qmin:%s emin:%s w:%s l:%s %s",
                     round(rec.exit_total, 5),
-                    round(min_running_total, 5),
+                    round(rec.min_exit_total, 5),
+                    round(df.exit_value.min(), 5),
                     rec.wins,
                     rec.losses,
                     kernel_conf,
@@ -221,12 +220,13 @@ def backtest(  # noqa: C901, PLR0915
         best_conf,
         best_rec,
     )
-    report(
-        best_df,
-        chart_config.instrument,
-        best_conf.signal_buy_column,  # type: ignore
-        best_conf.signal_exit_column,  # type: ignore
-        length=10,
-    )
+    if best_df is not None and best_conf is not None:
+        report(
+            best_df,
+            chart_config.instrument,
+            best_conf.signal_buy_column,
+            best_conf.signal_exit_column,
+            length=10,
+        )
 
     return best_conf

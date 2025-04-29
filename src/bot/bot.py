@@ -53,10 +53,7 @@ def bot_run(  # noqa: PLR0911
 
     # run kernel on candles
     recent_last_time = datetime.fromisoformat(df.iloc[-1]["timestamp"])
-    df = kernel(
-        df,
-        config=kernel_conf,
-    )
+    df = kernel(df, config=kernel_conf)
 
     # observe only and do not trade
     if observe_only:

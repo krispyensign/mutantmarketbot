@@ -5,7 +5,6 @@ import v20  # type: ignore
 import pandas as pd
 import logging
 
-logger = logging.getLogger("exchange")
 OK = [200, 201]
 
 
@@ -81,6 +80,7 @@ def getOandaOHLC(
         - ask_close
 
     """
+    logger = logging.getLogger("exchange")
     df = pd.DataFrame(
         columns=[
             "timestamp",
@@ -163,6 +163,7 @@ def place_order(
         The order ID of the placed order.
 
     """
+    logger = logging.getLogger("exchange")
     # place the order
     decimals = 5
     if ctx.instrument.split("_")[1] == "JPY":
@@ -229,6 +230,7 @@ def close_trade(ctx: OandaContext, trade_id: int) -> None:
         The trade ID of the order to close.
 
     """
+    logger = logging.getLogger("exchange")
     resp: v20.response.Response = ctx.ctx.trade.close(ctx.account_id, trade_id)
     if resp.body is None:
         raise Exception("No response body")
@@ -253,6 +255,7 @@ def get_open_trade(ctx: OandaContext, id: uuid.UUID) -> int:
         The trade ID of the first open trade for the app.
 
     """
+    logger = logging.getLogger("exchange")
     resp = ctx.ctx.trade.list_open(ctx.account_id)
     if resp.body is None:
         raise Exception("No response body")
