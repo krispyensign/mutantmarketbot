@@ -192,12 +192,15 @@ def backtest(  # noqa: C901, PLR0915
             if rec.wins == 0 or rec.exit_total < 0:
                 continue
 
+            if rec.min_exit_total < 0 and abs(rec.min_exit_total) > abs(rec.exit_total):
+                continue
+
             total_found += 1
             if (
                 rec.wins / (rec.wins + rec.losses) >= best_rec.wins / (
                     best_rec.wins + best_rec.losses
                 )
-                and rec.exit_total >= best_rec.exit_total
+                and rec.exit_total > best_rec.exit_total
             ):
                 logger.debug(
                     "new max found q:%s qmin:%s emin:%s w:%s l:%s %s",
