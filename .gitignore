@@ -19,3 +19,4 @@ ticks.json
 local_configs/
 logs/
 dist/
+logs/**/*.json
