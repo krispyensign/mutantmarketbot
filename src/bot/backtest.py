@@ -192,15 +192,17 @@ def backtest(  # noqa: C901, PLR0915
             if rec.wins == 0 or rec.exit_total < 0:
                 continue
 
+            min_running_total = df["running_total"].min()
+            best_min_running_total = best_df["running_total"].min()
             total_found += 1
             if (
-                rec.min_exit_total > best_rec.min_exit_total
+                min_running_total > best_min_running_total
                 and rec.exit_total > best_rec.exit_total
             ):
                 logger.debug(
                     "new max found q:%s qmin:%s w:%s l:%s %s",
                     round(rec.exit_total, 5),
-                    round(rec.min_exit_total, 5),
+                    round(min_running_total, 5),
                     rec.wins,
                     rec.losses,
                     kernel_conf,
