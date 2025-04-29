@@ -181,7 +181,6 @@ def backtest(  # noqa: C901, PLR0915
             )
             df = kernel(
                 orig_df.copy(),
-                include_incomplete=False,
                 config=kernel_conf,
             )
             if best_rec is None or best_conf is None or best_df is None:
@@ -190,7 +189,6 @@ def backtest(  # noqa: C901, PLR0915
                 best_df = df
 
             rec = df.iloc[-1]
-
             if rec.wins == 0 or rec.exit_total < 0:
                 continue
 

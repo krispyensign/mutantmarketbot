@@ -55,7 +55,6 @@ def bot_run(  # noqa: PLR0911
     recent_last_time = datetime.fromisoformat(df.iloc[-1]["timestamp"])
     df = kernel(
         df,
-        include_incomplete=True,
         config=kernel_conf,
     )
 
@@ -73,7 +72,7 @@ def bot_run(  # noqa: PLR0911
         return trade_id, df, None
 
     # check if the current time is greater than the recent last time
-    use_edge = (trade_id != -1) and kernel_conf.edge is True
+    use_edge = (trade_id != -1) and chart_conf.edge is True
     if not use_edge and (current_time - recent_last_time).total_seconds() > HALF_MINUTE:
         return trade_id, df, Exception(f"curr:{current_time} last:{recent_last_time}")
 
@@ -160,7 +159,6 @@ def bot(  # noqa: PLR0913
                 trade_conf=trade_conf,
                 observe_only=observe_only,
             )
-
         if err is not None:
             logger.error(err)
             sleep(2)
@@ -173,32 +171,68 @@ def bot(  # noqa: PLR0913
             logger.info(
                 f"w: {rec.wins} l: {rec.losses} min: {min_exit_value} max: {max_exit_value}"
             )
-        logger.info(f"columns used: {kernel_conf}")
-        logger.info(f"trade id: {trade_id}")
-        git_info = get_git_info()
-        if git_info is None:
-            logger.error("Failed to get Git info")
-            return None
-        logger.info("git info: %s %s", git_info[0], git_info[1])
-        logger.info(f"run complete. {trade_conf.bot_id}")
 
-        # print the results
-        if df is not None:
-            report(
-                df,
-                chart_conf.instrument,
-                kernel_conf.signal_buy_column,
-                kernel_conf.signal_exit_column,
-                length=10 if observe_only else 3,
-            )
+        log_event(
+            chart_conf, kernel_conf, trade_conf, observe_only, logger, trade_id, df
+        )
 
         if observe_only:
             break
 
-        if trade_id != -1 and kernel_conf.edge:
-            sleep(1)
-        else:
-            sleep_until_next_5_minute(trade_id=trade_id)
+        sleep_until_next_5_minute(trade_id=trade_id)
+
+
+def log_event(  # noqa: PLR0913
+    chart_conf: ChartConfig,
+    kernel_conf: KernelConfig,
+    trade_conf: TradeConfig,
+    observe_only: bool,
+    logger: logging.Logger,
+    trade_id: int,
+    df: pd.DataFrame | None,
+) -> None:
+    """Log event details and report trading results.
+
+    Parameters
+    ----------
+    chart_conf : ChartConfig
+        The chart configuration.
+    kernel_conf : KernelConfig
+        The kernel configuration.
+    trade_conf : TradeConfig
+        The trade configuration.
+    observe_only : bool
+        Whether the bot is in observe-only mode.
+    logger : logging.Logger
+        The logger to use for logging messages.
+    trade_id : int
+        The trade ID.
+    df : pd.DataFrame or None
+        The DataFrame containing the trading data, or None if not available.
+
+    Returns
+    -------
+    None
+
+    """
+    logger.info(f"columns used: {kernel_conf}")
+    logger.info(f"trade id: {trade_id}")
+    git_info = get_git_info()
+    if git_info is None:
+        logger.error("Failed to get Git info")
+        return
+    logger.info("git info: %s %s", git_info[0], git_info[1])
+    logger.info(f"run complete. {trade_conf.bot_id}")
+
+    # print the results
+    if df is not None:
+        report(
+            df,
+            chart_conf.instrument,
+            kernel_conf.signal_buy_column,
+            kernel_conf.signal_exit_column,
+            length=10 if observe_only else 3,
+        )
 
 
 def roundUp(dt):

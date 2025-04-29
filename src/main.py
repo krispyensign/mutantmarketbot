@@ -60,6 +60,7 @@ if __name__ == "__main__":
         conf = yaml.safe_load(open(sys.argv[2]))
         chart_conf = ChartConfig(**conf["chart_config"])
         kernel_conf = KernelConfig(**conf["kernel_config"])
+        kernel_conf.edge = chart_conf.edge
         trade_conf = TradeConfig(**conf["trade_config"])
 
         # setup logging
