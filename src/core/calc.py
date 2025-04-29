@@ -41,7 +41,7 @@ def take_profit(
     signal: NDArray[Any],
     trigger: NDArray[Any],
     take_profit_value: float,
-) -> tuple[NDArray[Any], NDArray[Any]]:
+) -> tuple[NDArray[np.int64], NDArray[np.int64]]:
     """Apply a take profit strategy to trading signals.
 
     Parameters
@@ -71,9 +71,9 @@ def take_profit(
     """
     take_profit_array = take_profit_value * atr
     signal = np.where((position_value > take_profit_array) & (trigger != 1), 0, signal)
-    trigger = np.diff(signal).astype(np.int64)
+    trigger = np.diff(signal)
     trigger = np.concatenate((np.zeros(1), trigger))
-    return signal, trigger
+    return signal.astype(np.int64), trigger.astype(np.int64)
 
 
 @jit(nopython=True)
@@ -109,9 +109,9 @@ def stop_loss(
     """
     stop_loss_array = stop_loss_value * atr
     signal = np.where(position_value < stop_loss_array, 0, signal)
-    trigger = np.diff(signal).astype(np.int64)
+    trigger = np.diff(signal)
     trigger = np.concatenate((np.zeros(1), trigger))
-    return signal, trigger
+    return signal.astype(np.int64), trigger.astype(np.int64)
 
 
 @jit(nopython=True)
@@ -140,7 +140,7 @@ def forward_fill(arr: NDArray) -> NDArray:
 @jit(nopython=True)
 def entry_price(
     entry: NDArray[Any], exit: NDArray[Any], signal: NDArray[Any], trigger: NDArray[Any]
-) -> tuple[NDArray[Any], NDArray[Any], NDArray[Any]]:
+) -> NDArray[np.float64]:
     """Calculate the entry price for a given trading signal.
 
     Parameters
@@ -165,4 +165,4 @@ def entry_price(
     entry_price = forward_fill(entry_price) * internal_bit_mask
     position_value = (exit - entry_price) * internal_bit_mask
 
-    return internal_bit_mask, entry_price, position_value
+    return position_value.astype(np.float64)

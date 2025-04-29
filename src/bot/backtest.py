@@ -22,7 +22,6 @@ import logging
 
 from bot.reporting import report
 
-logger = logging.getLogger("backtest")
 APP_START_TIME = datetime.now()
 
 
@@ -35,6 +34,7 @@ def get_git_info() -> tuple[str, bool] | None:
 
     If there is an error (e.g., not in a Git repository), the function returns None.
     """
+    logger = logging.getLogger("backtest")
     try:
         # Get commit hash
         commit_hash = subprocess.check_output(
@@ -82,15 +82,15 @@ class ChartConfig:
     instrument: str
     granularity: str
     candle_count: int
-    wma_period: int
     edge: bool
 
 
 def backtest(  # noqa: C901, PLR0915
     chart_config: ChartConfig,
+    kernel_conf_in: KernelConfig,
     token: str,
-    take_profit: list[float] = [0.0],
-    stop_loss: list[float] = [0.0],
+    take_profit: list[float],
+    stop_loss: list[float],
 ) -> KernelConfig | None:
     """Run a backtest of the trading strategy.
 
@@ -98,6 +98,8 @@ def backtest(  # noqa: C901, PLR0915
     ----------
     chart_config : ChartConfig
         The chart configuration.
+    kernel_conf_in : KernelConfig
+        The kernel configuration.
     token : str
         The Oanda API token.
     take_profit : list[float], optional
@@ -112,6 +114,7 @@ def backtest(  # noqa: C901, PLR0915
     printed to the log file.
 
     """
+    logger = logging.getLogger("backtest")
     logger.info("starting backtest")
     git_info = get_git_info()
     if git_info is None:
@@ -164,23 +167,20 @@ def backtest(  # noqa: C901, PLR0915
                     continue
                 if "open" not in signal_exit_column_name:
                     continue
-                if take_profit_multiplier != 0.0:
-                    continue
-                if stop_loss_multiplier != 0.0:
+                if "open" not in signal_buy_column_name:
                     continue
 
             kernel_conf = KernelConfig(
                 signal_buy_column=signal_buy_column_name,
                 signal_exit_column=signal_exit_column_name,
                 source_column=source_column_name,
-                wma_period=chart_config.wma_period,
+                wma_period=kernel_conf_in.wma_period,
                 take_profit=take_profit_multiplier,
                 stop_loss=stop_loss_multiplier,
                 edge=chart_config.edge,
             )
             df = kernel(
                 orig_df.copy(),
-                include_incomplete=False,
                 config=kernel_conf,
             )
             if best_rec is None or best_conf is None or best_df is None:
@@ -189,30 +189,20 @@ def backtest(  # noqa: C901, PLR0915
                 best_df = df
 
             rec = df.iloc[-1]
-
             if rec.wins == 0 or rec.exit_total < 0:
                 continue
 
-            # copy the df and only keep the latest 10% of rows
-            orig_sample_df = orig_df.copy().iloc[
-                -int(chart_config.candle_count * 0.1) :
-            ]
-            df_sample = kernel(
-                orig_sample_df,
-                include_incomplete=False,
-                config=kernel_conf,
-            )
-            sample_rec = df_sample.iloc[-1]
-
-            if sample_rec.wins == 0 or sample_rec.exit_total < 0:
-                continue
-
+            min_running_total = df["running_total"].min()
+            best_min_running_total = best_df["running_total"].min()
             total_found += 1
-            if rec.exit_total > best_rec.exit_total:
+            if (
+                min_running_total > best_min_running_total
+                and rec.exit_total > best_rec.exit_total
+            ):
                 logger.debug(
-                    "new max found q:%s q10:%s w:%s l:%s %s",
+                    "new max found q:%s qmin:%s w:%s l:%s %s",
                     round(rec.exit_total, 5),
-                    round(sample_rec.exit_total, 5),
+                    round(min_running_total, 5),
                     rec.wins,
                     rec.losses,
                     kernel_conf,

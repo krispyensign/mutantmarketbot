@@ -26,10 +26,10 @@ EDGE_BID_COLUMN = "bid_open"
 class KernelConfig:
     """A dataclass containing the configuration for the kernel."""
 
-    signal_buy_column: str
-    signal_exit_column: str
-    source_column: str
-    edge: bool
+    signal_buy_column: str = ""
+    signal_exit_column: str = ""
+    source_column: str = ""
+    edge: bool = False
     wma_period: int = 20
     take_profit: float = 0
     stop_loss: float = 0
@@ -40,21 +40,20 @@ class KernelConfig:
 
 
 @jit(nopython=True)
-def wma_signals(
+def wma_deterministic_signals(
     buy_data: NDArray[Any],
     exit_data: NDArray[Any],
     wma_data: NDArray[Any],
 ) -> tuple[NDArray[Any], NDArray[Any]]:
-    """Generate trading signals based on a comparison highs and lows to the wma."""
-    signals = np.where(buy_data > wma_data, 1, 0)
-    trigger = np.diff(signals).astype(np.int64)
+    """Calculate the weighted moving average."""
+    signals = np.where((buy_data > wma_data), 1, 0)
+    trigger = np.diff(signals)
     trigger = np.concatenate((np.zeros(1), trigger))
-
     signals = np.where((exit_data < wma_data) & (trigger != 1), 0, signals)
-    trigger = np.diff(signals).astype(np.int64)
+    trigger = np.diff(signals)
     trigger = np.concatenate((np.zeros(1), trigger))
 
-    return signals, trigger
+    return signals.astype(np.int64), trigger.astype(np.int64)
 
 
 @jit(nopython=True)
@@ -65,8 +64,8 @@ def kernel_stage_1(  # noqa: PLR0913
     ask_data: NDArray[Any],
     bid_data: NDArray[Any],
     atr: NDArray[Any],
-    take_profit_conf: float,
-    stop_loss_conf: float,
+    take_profit_conf: np.float64,
+    stop_loss_conf: np.float64,
 ):
     """Perform the first stage of the kernel.
 
@@ -105,14 +104,14 @@ def kernel_stage_1(  # noqa: PLR0913
     # 0 0 1 1 1 0 0 - 1 above or 0 below the wma
     # 0 0 1 0 0 -1 0 - diff gives actual trigger
     # NOTE: usage of close prices differs online than in offline trading
-    signal, trigger = wma_signals(
+    signal, trigger = wma_deterministic_signals(
         buy_data,
         exit_data,
         wma_data,
     )
 
     # calculate the entry prices:
-    _, _, position_value = entry_price(
+    position_value = entry_price(
         ask_data,
         bid_data,
         signal,
@@ -128,7 +127,7 @@ def kernel_stage_1(  # noqa: PLR0913
             trigger,
             take_profit_conf,
         )
-        _, _, position_value = entry_price(
+        position_value = entry_price(
             ask_data,
             bid_data,
             signal,
@@ -142,7 +141,7 @@ def kernel_stage_1(  # noqa: PLR0913
             signal,
             stop_loss_conf,
         )
-        _, _, position_value = entry_price(
+        position_value = entry_price(
             ask_data,
             bid_data,
             signal,
@@ -154,7 +153,6 @@ def kernel_stage_1(  # noqa: PLR0913
 
 def kernel(
     df: pd.DataFrame,
-    include_incomplete: bool,
     config: KernelConfig,
 ) -> pd.DataFrame:
     """Process a DataFrame containing trading data.
@@ -168,8 +166,6 @@ def kernel(
     ----------
     df : pd.DataFrame
         A DataFrame containing trading data.
-    include_incomplete:
-        Whether to include the last candle in the output DataFrame.
     config : KernelConfig
         A dataclass containing the configuration for the kernel.
 
@@ -179,11 +175,6 @@ def kernel(
         A DataFrame containing the processed trading data.
 
     """
-    if not include_incomplete:
-        df = df.iloc[:-1].copy()
-    else:
-        df = df.copy()
-
     if (
         "ha" in config.signal_buy_column
         or "ha" in config.signal_exit_column
