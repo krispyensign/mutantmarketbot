@@ -183,24 +183,30 @@ def backtest(  # noqa: C901, PLR0915
                 orig_df.copy(),
                 config=kernel_conf,
             )
-            if best_rec is None or best_conf is None or best_df is None:
-                best_rec = df.iloc[-1]
-                best_conf = kernel_conf
-                best_df = df
-
             rec = df.iloc[-1]
-            if rec.wins == 0 or rec.exit_total < 0:
-                continue
+            if best_rec is None or best_conf is None or best_df is None:
+                best_rec = rec
+                best_conf = kernel_conf
+                best_df = df.copy()
 
-            if rec.min_exit_total < 0 and abs(rec.min_exit_total) > abs(rec.exit_total):
-                continue
-
-            total_found += 1
+            # if there are no wins, the total is worse, or the min total is worse then continue
             if (
-                rec.wins / (rec.wins + rec.losses)
-                >= best_rec.wins / (best_rec.wins + best_rec.losses)
-                and rec.exit_total >= best_rec.exit_total
+                rec.wins == 0
+                or rec.exit_total < 0
+                or rec.min_exit_total < 0
+                and abs(rec.min_exit_total) > abs(rec.exit_total)
             ):
+                continue
+
+            # if there are no losses, or the win ratio is better, or the total is better
+            # then record it
+            total_found += 1
+            no_losses = rec.losses == 0 and best_rec.losses == 0
+            better_win_ratio = rec.wins / (rec.wins + rec.losses) >= best_rec.wins / (
+                best_rec.wins + best_rec.losses
+            )
+            better_total = rec.exit_total >= best_rec.exit_total
+            if (no_losses or better_win_ratio) and better_total:
                 logger.debug(
                     "new max found q:%s qmin:%s emin:%s w:%s l:%s %s",
                     round(rec.exit_total, 5),
