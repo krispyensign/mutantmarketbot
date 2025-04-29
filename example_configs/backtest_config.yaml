@@ -1,7 +1,11 @@
 chart_config:
   granularity: M5
-  wma_period: 20
   candle_count: 288
+  edge: True
+  instrument: EUR_USD
+
+kernel_config:
+  wma_period: 20
 
 take_profit:
   - 0.0
