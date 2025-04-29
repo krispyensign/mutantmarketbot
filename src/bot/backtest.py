@@ -197,11 +197,11 @@ def backtest(  # noqa: C901, PLR0915
 
             total_found += 1
             no_losses = rec.losses == 0 and best_rec.losses == 0
-            better_win_ration = rec.wins / (rec.wins + rec.losses) >= best_rec.wins / (
+            better_win_ratio = rec.wins / (rec.wins + rec.losses) >= best_rec.wins / (
                 best_rec.wins + best_rec.losses
             )
             better_total = rec.exit_total >= best_rec.exit_total
-            if (no_losses or better_win_ration) and better_total:
+            if (no_losses or better_win_ratio) and better_total:
                 logger.debug(
                     "new max found q:%s qmin:%s emin:%s w:%s l:%s %s",
                     round(rec.exit_total, 5),
