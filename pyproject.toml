@@ -14,6 +14,7 @@ dependencies = [
     "numpy",
     "ta-lib",
     "pyyaml",
+    "ecs-logging",
 ]
 
 [tool.hatch.build.targets.wheel]
