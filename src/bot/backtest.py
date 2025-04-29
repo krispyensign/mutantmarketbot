@@ -82,12 +82,12 @@ class ChartConfig:
     instrument: str
     granularity: str
     candle_count: int
-    wma_period: int
     edge: bool
 
 
 def backtest(  # noqa: C901, PLR0915
     chart_config: ChartConfig,
+    kernel_conf_in: KernelConfig,
     token: str,
     take_profit: list[float],
     stop_loss: list[float],
@@ -98,6 +98,8 @@ def backtest(  # noqa: C901, PLR0915
     ----------
     chart_config : ChartConfig
         The chart configuration.
+    kernel_conf_in : KernelConfig
+        The kernel configuration.
     token : str
         The Oanda API token.
     take_profit : list[float], optional
@@ -167,16 +169,12 @@ def backtest(  # noqa: C901, PLR0915
                     continue
                 if "open" not in signal_buy_column_name:
                     continue
-                if take_profit_multiplier != 0.0:
-                    continue
-                if stop_loss_multiplier != 0.0:
-                    continue
 
             kernel_conf = KernelConfig(
                 signal_buy_column=signal_buy_column_name,
                 signal_exit_column=signal_exit_column_name,
                 source_column=source_column_name,
-                wma_period=chart_config.wma_period,
+                wma_period=kernel_conf_in.wma_period,
                 take_profit=take_profit_multiplier,
                 stop_loss=stop_loss_multiplier,
                 edge=chart_config.edge,
@@ -197,19 +195,21 @@ def backtest(  # noqa: C901, PLR0915
                 continue
 
             total_found += 1
-            if rec.min_exit_total > best_rec.min_exit_total:
-                if rec.exit_total > best_rec.exit_total:
-                    logger.debug(
-                        "new max found q:%s qmin:%s w:%s l:%s %s",
-                        round(rec.exit_total, 5),
-                        round(rec.min_exit_total, 5),
-                        rec.wins,
-                        rec.losses,
-                        kernel_conf,
-                    )
-                    best_rec = rec
-                    best_conf = kernel_conf
-                    best_df = df.copy()
+            if (
+                rec.min_exit_total > best_rec.min_exit_total
+                and rec.exit_total > best_rec.exit_total
+            ):
+                logger.debug(
+                    "new max found q:%s qmin:%s w:%s l:%s %s",
+                    round(rec.exit_total, 5),
+                    round(rec.min_exit_total, 5),
+                    rec.wins,
+                    rec.losses,
+                    kernel_conf,
+                )
+                best_rec = rec
+                best_conf = kernel_conf
+                best_df = df.copy()
 
     logger.info("total_found: %s", total_found)
     if total_found == 0:

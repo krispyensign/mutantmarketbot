@@ -26,10 +26,10 @@ EDGE_BID_COLUMN = "bid_open"
 class KernelConfig:
     """A dataclass containing the configuration for the kernel."""
 
-    signal_buy_column: str
-    signal_exit_column: str
-    source_column: str
-    edge: bool
+    signal_buy_column: str = ""
+    signal_exit_column: str = ""
+    source_column: str = ""
+    edge: bool = False
     wma_period: int = 20
     take_profit: float = 0
     stop_loss: float = 0
@@ -153,7 +153,6 @@ def kernel_stage_1(  # noqa: PLR0913
 
 def kernel(
     df: pd.DataFrame,
-    include_incomplete: bool,
     config: KernelConfig,
 ) -> pd.DataFrame:
     """Process a DataFrame containing trading data.
@@ -167,8 +166,6 @@ def kernel(
     ----------
     df : pd.DataFrame
         A DataFrame containing trading data.
-    include_incomplete:
-        Whether to include the last candle in the output DataFrame.
     config : KernelConfig
         A dataclass containing the configuration for the kernel.
 
@@ -178,11 +175,6 @@ def kernel(
         A DataFrame containing the processed trading data.
 
     """
-    if not include_incomplete:
-        df = df.iloc[:-1].copy()
-    else:
-        df = df.copy()
-
     if (
         "ha" in config.signal_buy_column
         or "ha" in config.signal_exit_column

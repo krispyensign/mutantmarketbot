@@ -17,8 +17,9 @@ ACCOUNT_ID = os.environ.get("OANDA_ACCOUNT_ID")
 USAGE = """
     mutantmarketbot
       Usage: 
-        python main.py backtest EUR_USD <my_config>.yaml
-        python main.py bot <my_config>.yaml [observe]
+        python main.py backtest <my_config>.yaml
+        python main.py bot <my_config>.yaml
+        python main.py observe <my_config>.yaml
       ENV:
         OANDA_TOKEN=<token>
         OANDA_ACCOUNT_ID=<account_id>
@@ -33,9 +34,9 @@ if __name__ == "__main__":
 
     if "backtest" in sys.argv[1]:
         # load config
-        instrument = sys.argv[2]
-        conf = yaml.safe_load(open(sys.argv[3]))
-        chart_conf = ChartConfig(instrument, **conf["chart_config"])
+        conf = yaml.safe_load(open(sys.argv[2]))
+        chart_conf = ChartConfig(**conf["chart_config"])
+        kernel_conf = KernelConfig(**conf["kernel_config"])
 
         # setup logging
         logging_conf = conf["logging"]
@@ -43,20 +44,16 @@ if __name__ == "__main__":
         logger = logging.getLogger("main")
 
         # configure take profit and stop loss
-        tp = [0.0]
-        sl = [0.0]
-        if "take_profit" in conf:
-            tp = conf["take_profit"]
-        if "stop_loss" in conf:
-            sl = conf["stop_loss"]
+        tp = conf["take_profit"] if "take_profit" in conf else [0.0]
+        sl = conf["stop_loss"] if "stop_loss" in conf else [0.0]
 
         # run
-        result = backtest(chart_conf, token=TOKEN, take_profit=tp, stop_loss=sl)
+        result = backtest(chart_conf, kernel_conf, token=TOKEN, take_profit=tp, stop_loss=sl)
         logger.info(result)
         if result is None:
             sys.exit(1)
 
-    elif "bot" in sys.argv[1]:
+    elif sys.argv[1] in ["bot", "observe"]:
         # load config
         conf = yaml.safe_load(open(sys.argv[2]))
         chart_conf = ChartConfig(**conf["chart_config"])
@@ -69,17 +66,13 @@ if __name__ == "__main__":
         logger = logging.getLogger("main")
 
         # run
-        if "observe" in sys.argv:
-            observe_only = True
-        else:
-            observe_only = False
         bot(
             token=TOKEN,
             account_id=ACCOUNT_ID,
             chart_conf=chart_conf,
             kernel_conf=kernel_conf,
             trade_conf=trade_conf,
-            observe_only=observe_only,
+            observe_only=sys.argv[1] == "observe",
         )
     else:
         print(sys.argv)
