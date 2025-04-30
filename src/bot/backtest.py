@@ -9,9 +9,6 @@ import pandas as pd
 import v20  # type: ignore
 from alive_progress import alive_it  # type: ignore
 
-from bot.constants import (
-    SOURCE_COLUMNS,
-)
 from core.kernel import KernelConfig, kernel
 from bot.exchange import (
     getOandaOHLC,
@@ -82,15 +79,32 @@ class ChartConfig:
     instrument: str
     granularity: str
     candle_count: int
-    edge: bool
+
+
+@dataclass
+class BacktestConfig:
+    """BacktestConfig class."""
+
+    take_profit: list[float]
+    stop_loss: list[float]
+    source_columns: list[str]
+
+    def get_column_pairs(self) -> tuple[itertools.product, int]:
+        """Get column pairs."""
+        return itertools.product(
+            self.source_columns,
+            self.source_columns,
+            self.source_columns,
+            self.take_profit,
+            self.stop_loss,
+        ), len(self.source_columns) ** 3 * len(self.take_profit) * len(self.stop_loss)
 
 
 def backtest(  # noqa: C901, PLR0915
     chart_config: ChartConfig,
     kernel_conf_in: KernelConfig,
     token: str,
-    take_profit: list[float],
-    stop_loss: list[float],
+    backtest_config: BacktestConfig,
 ) -> KernelConfig | None:
     """Run a backtest of the trading strategy.
 
@@ -102,10 +116,13 @@ def backtest(  # noqa: C901, PLR0915
         The kernel configuration.
     token : str
         The Oanda API token.
-    take_profit : list[float], optional
-        The take profit values, by default [0.0]
-    stop_loss : list[float], optional
-        The stop loss values, by default [0.0]
+    backtest_config : BacktestConfig
+        The backtest configuration.
+
+    Returns
+    -------
+    KernelConfig | None
+        The best kernel configuration.
 
     Notes
     -----
@@ -142,16 +159,7 @@ def backtest(  # noqa: C901, PLR0915
     best_rec: pd.Series[Any] | None = None
     best_conf: KernelConfig | None = None
 
-    column_pairs = itertools.product(
-        SOURCE_COLUMNS, SOURCE_COLUMNS, SOURCE_COLUMNS, take_profit, stop_loss
-    )
-    column_pair_len = (
-        len(SOURCE_COLUMNS)
-        * len(SOURCE_COLUMNS)
-        * len(SOURCE_COLUMNS)
-        * len(take_profit)
-        * len(stop_loss)
-    )
+    column_pairs, column_pair_len = backtest_config.get_column_pairs()
     logger.info(f"total_combinations: {column_pair_len}")
     total_found = 0
     with PerfTimer(start_time, logger):
@@ -162,14 +170,6 @@ def backtest(  # noqa: C901, PLR0915
             take_profit_multiplier,
             stop_loss_multiplier,
         ) in alive_it(column_pairs, total=column_pair_len):
-            if chart_config.edge:
-                if "open" not in source_column_name:
-                    continue
-                if "open" not in signal_exit_column_name:
-                    continue
-                if "open" not in signal_buy_column_name:
-                    continue
-
             kernel_conf = KernelConfig(
                 signal_buy_column=signal_buy_column_name,
                 signal_exit_column=signal_exit_column_name,
@@ -177,7 +177,6 @@ def backtest(  # noqa: C901, PLR0915
                 wma_period=kernel_conf_in.wma_period,
                 take_profit=take_profit_multiplier,
                 stop_loss=stop_loss_multiplier,
-                edge=chart_config.edge,
             )
             df = kernel(
                 orig_df.copy(),
@@ -234,8 +233,7 @@ def backtest(  # noqa: C901, PLR0915
         report(
             best_df,
             chart_config.instrument,
-            best_conf.signal_buy_column,
-            best_conf.signal_exit_column,
+            best_conf,
             length=10,
         )
 

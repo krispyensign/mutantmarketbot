@@ -4,16 +4,13 @@ from datetime import timedelta
 import pandas as pd
 import logging
 
-
-ENTRY_COLUMN = "ask_close"
-EXIT_COLUMN = "bid_open"
+from core.kernel import ASK_COLUMN, BID_COLUMN, EDGE_BID_COLUMN, KernelConfig
 
 
 def report(
     df: pd.DataFrame,
     instrument: str,
-    signal_buy_column: str,
-    signal_exit_column: str,
+    kernel_conf: KernelConfig,
     length: int = 3,
 ):
     """Print a report of the trading results.
@@ -24,25 +21,24 @@ def report(
         The DataFrame containing the trading data.
     instrument : str
         The instrument being traded.
-    signal_buy_column : str
-        The column name for the buy signal data.
-    signal_exit_column : str
-        The column name for the exit signal data.
+    kernel_conf : KernelConfig
+        The kernel configuration.
     length : int, optional
         The number of rows to print, by default 2
 
     """
     logger = logging.getLogger("reporting")
+    bid_name = EDGE_BID_COLUMN if kernel_conf.edge else BID_COLUMN
     df_ticks = df.reset_index()[
         [
             "signal",
             "trigger",
             "atr",
             "wma",
-            signal_buy_column,
-            signal_exit_column,
-            ENTRY_COLUMN,
-            EXIT_COLUMN,
+            kernel_conf.signal_buy_column,
+            kernel_conf.signal_exit_column,
+            ASK_COLUMN,
+            bid_name,
             "position_value",
             "exit_value",
             "running_total",

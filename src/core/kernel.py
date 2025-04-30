@@ -29,10 +29,18 @@ class KernelConfig:
     signal_buy_column: str = ""
     signal_exit_column: str = ""
     source_column: str = ""
-    edge: bool = False
     wma_period: int = 20
     take_profit: float = 0
     stop_loss: float = 0
+
+    @property
+    def edge(self) -> bool:
+        """Return the edge column."""
+        return (
+            "open" in self.source_column
+            and "open" in self.signal_buy_column
+            and "open" in self.signal_exit_column
+        )
 
     def __str__(self):
         """Return a string representation of the SignalConfig object."""

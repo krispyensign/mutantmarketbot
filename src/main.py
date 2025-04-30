@@ -6,7 +6,7 @@ import sys
 
 import yaml
 
-from bot.backtest import ChartConfig, backtest
+from bot.backtest import BacktestConfig, ChartConfig, backtest
 from bot.bot import TradeConfig, bot
 from core.kernel import KernelConfig
 import os
@@ -37,6 +37,7 @@ if __name__ == "__main__":
         conf = yaml.safe_load(open(sys.argv[2]))
         chart_conf = ChartConfig(**conf["chart_config"])
         kernel_conf = KernelConfig(**conf["kernel_config"])
+        backtest_conf = BacktestConfig(**conf["backtest_config"])
 
         # setup logging
         logging_conf = conf["logging"]
@@ -48,9 +49,7 @@ if __name__ == "__main__":
         sl = conf["stop_loss"] if "stop_loss" in conf else [0.0]
 
         # run
-        result = backtest(
-            chart_conf, kernel_conf, token=TOKEN, take_profit=tp, stop_loss=sl
-        )
+        result = backtest(chart_conf, kernel_conf, TOKEN, backtest_conf)
         logger.info(result)
         if result is None:
             sys.exit(1)
@@ -60,7 +59,6 @@ if __name__ == "__main__":
         conf = yaml.safe_load(open(sys.argv[2]))
         chart_conf = ChartConfig(**conf["chart_config"])
         kernel_conf = KernelConfig(**conf["kernel_config"])
-        kernel_conf.edge = chart_conf.edge
         trade_conf = TradeConfig(**conf["trade_config"])
 
         # setup logging
