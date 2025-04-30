@@ -222,8 +222,7 @@ def log_event(  # noqa: PLR0913
         report(
             df,
             chart_conf.instrument,
-            kernel_conf.signal_buy_column,
-            kernel_conf.signal_exit_column,
+            kernel_conf,
             length=10 if observe_only else 3,
         )
 
