@@ -233,7 +233,7 @@ def backtest(  # noqa: C901, PLR0915
         report(
             best_df,
             chart_config.instrument,
-            kernel_conf,
+            best_conf,
             length=10,
         )
 
