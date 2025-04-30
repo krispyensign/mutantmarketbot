@@ -74,7 +74,7 @@ def bot_run(  # noqa: PLR0911
 
     # place order
     try:
-        rec = df.iloc[-1] if chart_conf.edge else df.iloc[-2]
+        rec = df.iloc[-1] if kernel_conf.edge else df.iloc[-2]
         if rec.trigger == 1 and trade_id == -1:
             trade_id = place_order(
                 ctx,

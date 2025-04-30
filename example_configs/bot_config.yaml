@@ -6,7 +6,6 @@ chart_config:
   instrument: USD_CHF
   granularity: M5
   candle_count: 288
-  edge: True
 
 kernel_config:
   source_column: bid_open

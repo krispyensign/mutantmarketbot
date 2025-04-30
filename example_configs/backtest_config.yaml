@@ -1,7 +1,6 @@
 chart_config:
   granularity: M5
   candle_count: 288
-  edge: True
   instrument: EUR_USD
 
 kernel_config:
