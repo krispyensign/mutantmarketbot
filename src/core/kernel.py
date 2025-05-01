@@ -38,8 +38,17 @@ class KernelConfig:
         """Return the edge column."""
         return (
             "open" in self.source_column
-            and "open" in self.signal_buy_column
+            and ("open" in self.signal_exit_column or "low" in self.signal_exit_column)
+            and ("open" in self.signal_buy_column or "high" in self.signal_buy_column)
+        )
+
+    @property
+    def true_edge(self) -> bool:
+        """Return the edge column."""
+        return (
+            "open" in self.source_column
             and "open" in self.signal_exit_column
+            and "open" in self.signal_buy_column
         )
 
     def __str__(self):
@@ -48,32 +57,39 @@ class KernelConfig:
 
 
 @jit(nopython=True)
-def wma_deterministic_signals(
-    buy_data: NDArray[Any],
-    exit_data: NDArray[Any],
-    wma_data: NDArray[Any],
-) -> tuple[NDArray[Any], NDArray[Any]]:
+def wma_exit_signals(
+    buy_data: NDArray[np.float64],
+    exit_data: NDArray[np.float64],
+    wma_data: NDArray[np.float64],
+) -> tuple[NDArray[np.int64], NDArray[np.int64]]:
     """Calculate the weighted moving average."""
-    signals = np.where((buy_data > wma_data), 1, 0)
-    trigger = np.diff(signals)
-    trigger = np.concatenate((np.zeros(1), trigger))
-    signals = np.where((exit_data < wma_data) & (trigger != 1), 0, signals)
-    trigger = np.diff(signals)
+    signals = np.zeros(len(buy_data)).astype(np.bool_)
+    buy_signals = np.where(buy_data > wma_data, np.True_, np.False_)
+    exit_signals = np.where(exit_data > wma_data, np.True_, np.False_)
+    for i in range(1, len(buy_signals)):
+        An1 = buy_signals[i - 1]
+        An = buy_signals[i]
+        B = exit_signals[i]
+        signals[i] = not An1 and An or An1 and B
+
+    trigger = np.diff(signals.astype(np.int64))
     trigger = np.concatenate((np.zeros(1), trigger))
 
     return signals.astype(np.int64), trigger.astype(np.int64)
 
+
 @jit(nopython=True)
 def wma_signals_no_exit(
-    buy_data: NDArray[Any],
-    wma_data: NDArray[Any],
-) -> tuple[NDArray[Any], NDArray[Any]]:
+    buy_data: NDArray[np.float64],
+    wma_data: NDArray[np.float64],
+) -> tuple[NDArray[np.int64], NDArray[np.int64]]:
     """Calculate the weighted moving average."""
     signals = np.where(buy_data > wma_data, 1, 0)
     trigger = np.diff(signals)
     trigger = np.concatenate((np.zeros(1), trigger))
 
     return signals.astype(np.int64), trigger.astype(np.int64)
+
 
 @jit(nopython=True)
 def kernel_stage_1(  # noqa: PLR0913
@@ -127,7 +143,7 @@ def kernel_stage_1(  # noqa: PLR0913
     # 0 0 1 0 0 -1 0 - diff gives actual trigger
     # NOTE: usage of close prices differs online than in offline trading
     if use_exit:
-        signal, trigger = wma_deterministic_signals(
+        signal, trigger = wma_exit_signals(
             buy_data,
             exit_data,
             wma_data,
