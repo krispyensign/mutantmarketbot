@@ -65,8 +65,7 @@ def bot_run(  # noqa: PLR0911
     )
 
     # if no trades are open then resync if necessary
-    is_deterministic = kernel_conf.true_edge or not kernel_conf.edge
-    if is_deterministic or trade_id == -1:
+    if kernel_conf.is_deterministic or trade_id == -1:
         if trade_id == -1 and current_time.minute % 5 != 0:
             return trade_id, df, None
 
@@ -79,8 +78,7 @@ def bot_run(  # noqa: PLR0911
         rec = df.iloc[-1] if kernel_conf.edge else df.iloc[-2]
         if rec.trigger == 1 and trade_id == -1:
 
-            is_edge = kernel_conf.edge and not kernel_conf.true_edge
-            if is_edge:
+            if not kernel_conf.is_deterministic:
                 take_profit_price = rec.atr * kernel_conf.take_profit + rec[ASK_COLUMN]
                 trade_id = place_order(
                     ctx,
@@ -187,7 +185,7 @@ def bot(  # noqa: PLR0913
         if observe_only:
             break
 
-        if kernel_conf.edge and not kernel_conf.true_edge:
+        if trade_id != -1 and not kernel_conf.is_deterministic:
             sleep(1)
             continue
 

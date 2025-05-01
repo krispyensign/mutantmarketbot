@@ -1,6 +1,7 @@
 """Functions for processing and generating trading signals."""
 
 from dataclasses import dataclass
+from functools import cached_property
 from typing import Any
 import talib
 import pandas as pd
@@ -33,7 +34,7 @@ class KernelConfig:
     take_profit: float = 0
     stop_loss: float = 0
 
-    @property
+    @cached_property
     def edge(self) -> bool:
         """Return the edge column."""
         return (
@@ -42,7 +43,7 @@ class KernelConfig:
             and ("open" in self.signal_buy_column or "high" in self.signal_buy_column)
         )
 
-    @property
+    @cached_property
     def true_edge(self) -> bool:
         """Return the edge column."""
         return (
@@ -50,6 +51,11 @@ class KernelConfig:
             and "open" in self.signal_exit_column
             and "open" in self.signal_buy_column
         )
+    
+    @cached_property
+    def is_deterministic(self) -> bool:
+        """Return the edge column."""
+        return not self.edge or self.true_edge
 
     def __str__(self):
         """Return a string representation of the SignalConfig object."""
