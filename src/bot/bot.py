@@ -65,20 +65,23 @@ def bot_run(  # noqa: PLR0911
     )
 
     # if no trades are open then resync if necessary
-    should_resync = kernel_conf.true_edge or not kernel_conf.edge
-    is_edge = kernel_conf.edge and not kernel_conf.true_edge
-    if should_resync and trade_id == -1 and current_time.minute % 5 != 0:
-        return trade_id, df, None
+    is_deterministic = kernel_conf.true_edge or not kernel_conf.edge
+    edge_rec = None if is_deterministic else df.iloc[-1]
+    empty_signal_in_progress = edge_rec is not None and edge_rec.signal == 1 and trade_id == -1
+    if is_deterministic or empty_signal_in_progress:
+        if trade_id == -1 and current_time.minute % 5 != 0:
+            return trade_id, df, None
 
-    # check if the current time is greater than the recent last time
-    if (current_time - recent_last_time).total_seconds() > HALF_MINUTE:
-        return trade_id, df, Exception(f"curr:{current_time} last:{recent_last_time}")
+        # check if the current time is greater than the recent last time
+        if (current_time - recent_last_time).total_seconds() > HALF_MINUTE:
+            return trade_id, df, Exception(f"curr:{current_time} last:{recent_last_time}")
 
     # place order
     try:
         rec = df.iloc[-1] if kernel_conf.edge else df.iloc[-2]
         if rec.trigger == 1 and trade_id == -1:
 
+            is_edge = kernel_conf.edge and not kernel_conf.true_edge
             if is_edge:
                 take_profit_price = rec.atr * kernel_conf.take_profit + rec[ASK_COLUMN]
                 trade_id = place_order(
@@ -178,6 +181,7 @@ def bot(  # noqa: PLR0913
                 f"w: {rec.wins} l: {rec.losses} min: {min_exit_value} max: {max_exit_value}"
             )
 
+        logger.info(f"git commit: {git_info[0]}, porcelain: {git_info[1]}")
         log_event(
             chart_conf, kernel_conf, trade_conf, observe_only, logger, trade_id, df
         )
@@ -227,11 +231,6 @@ def log_event(  # noqa: PLR0913
     """
     logger.info(f"columns used: {kernel_conf}")
     logger.info(f"trade id: {trade_id}")
-    git_info = get_git_info()
-    if git_info is None:
-        logger.error("Failed to get Git info")
-        return
-    logger.info("git info: %s %s", git_info[0], git_info[1])
     logger.info(f"run complete. {trade_conf.bot_id}")
 
     # print the results
