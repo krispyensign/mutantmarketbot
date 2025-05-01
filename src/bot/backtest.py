@@ -88,6 +88,7 @@ class BacktestConfig:
     take_profit: list[float]
     stop_loss: list[float]
     source_columns: list[str]
+    deterministic: bool = False
 
     def get_column_pairs(self) -> tuple[itertools.product, int]:
         """Get column pairs."""
@@ -178,6 +179,8 @@ def backtest(  # noqa: C901, PLR0915
                 take_profit=take_profit_multiplier,
                 stop_loss=stop_loss_multiplier,
             )
+            if backtest_config.deterministic and kernel_conf.edge and not kernel_conf.true_edge:
+                continue
             df = kernel(
                 orig_df.copy(),
                 config=kernel_conf,
@@ -188,7 +191,7 @@ def backtest(  # noqa: C901, PLR0915
                 best_conf = kernel_conf
                 best_df = df.copy()
 
-            # if there are no wins, the total is worse, or the min total is worse then continue
+            # if there are no wins, the total is worse, or the min total is worse then skip
             if (
                 rec.wins == 0
                 or rec.exit_total < 0
