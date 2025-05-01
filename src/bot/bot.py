@@ -66,9 +66,7 @@ def bot_run(  # noqa: PLR0911
 
     # if no trades are open then resync if necessary
     is_deterministic = kernel_conf.true_edge or not kernel_conf.edge
-    edge_rec = None if is_deterministic else df.iloc[-1]
-    empty_signal_in_progress = edge_rec is not None and edge_rec.signal == 1 and trade_id == -1
-    if is_deterministic or empty_signal_in_progress:
+    if is_deterministic or trade_id == -1:
         if trade_id == -1 and current_time.minute % 5 != 0:
             return trade_id, df, None
 
