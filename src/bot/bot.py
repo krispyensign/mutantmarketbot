@@ -9,7 +9,7 @@ import v20  # type: ignore
 import pandas as pd
 
 from bot.backtest import ChartConfig, PerfTimer, get_git_info
-from core.kernel import KernelConfig, kernel
+from core.kernel import ASK_COLUMN, KernelConfig, kernel
 from bot.reporting import report
 from bot.exchange import (
     close_trade,
@@ -66,6 +66,7 @@ def bot_run(  # noqa: PLR0911
 
     # if no trades are open then resync if necessary
     should_resync = kernel_conf.true_edge or not kernel_conf.edge
+    is_edge = kernel_conf.edge and not kernel_conf.true_edge
     if should_resync and trade_id == -1 and current_time.minute % 5 != 0:
         return trade_id, df, None
 
@@ -77,11 +78,22 @@ def bot_run(  # noqa: PLR0911
     try:
         rec = df.iloc[-1] if kernel_conf.edge else df.iloc[-2]
         if rec.trigger == 1 and trade_id == -1:
-            trade_id = place_order(
-                ctx,
-                trade_conf.amount,
-                trade_conf.bot_id,
-            )
+
+            if is_edge:
+                take_profit_price = rec.atr * kernel_conf.take_profit + rec[ASK_COLUMN]
+                trade_id = place_order(
+                    ctx,
+                    trade_conf.amount,
+                    trade_conf.bot_id,
+                    take_profit=take_profit_price,
+                    trailing_distance=rec.atr * kernel_conf.stop_loss,
+                )
+            else:
+                trade_id = place_order(
+                    ctx,
+                    trade_conf.amount,
+                    trade_conf.bot_id,
+                )
         # close order
         elif (rec.trigger == -1 and trade_id != -1) or (
             rec.trigger == 0 and rec.signal == 0 and trade_id != -1
