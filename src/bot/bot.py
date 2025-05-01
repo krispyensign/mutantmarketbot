@@ -65,7 +65,8 @@ def bot_run(  # noqa: PLR0911
     )
 
     # if no trades are open then resync if necessary
-    if trade_id == -1 and current_time.minute % 5 != 0:
+    should_resync = kernel_conf.true_edge or not kernel_conf.edge
+    if should_resync and trade_id == -1 and current_time.minute % 5 != 0:
         return trade_id, df, None
 
     # check if the current time is greater than the recent last time
@@ -171,6 +172,10 @@ def bot(  # noqa: PLR0913
 
         if observe_only:
             break
+
+        if kernel_conf.edge and not kernel_conf.true_edge:
+            sleep(1)
+            continue
 
         sleep_until_next_5_minute(trade_id=trade_id)
 
