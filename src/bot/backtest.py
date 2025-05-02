@@ -9,7 +9,7 @@ import pandas as pd
 import v20  # type: ignore
 from alive_progress import alive_it  # type: ignore
 
-from core.kernel import KernelConfig, kernel
+from core.kernel import KernelConfig, kernel, EdgeCategory
 from bot.exchange import (
     getOandaOHLC,
     OandaContext,
@@ -89,6 +89,7 @@ class BacktestConfig:
     stop_loss: list[float]
     source_columns: list[str]
     verifier: str
+    disable_fast: bool
 
     def get_column_pairs(self) -> tuple[itertools.product, int]:
         """Get column pairs."""
@@ -192,6 +193,8 @@ def backtest(  # noqa: C901, PLR0915
                 take_profit=take_profit_multiplier,
                 stop_loss=stop_loss_multiplier,
             )
+            if backtest_config.disable_fast and kernel_conf.edge == EdgeCategory.Fast:
+                continue
             df = kernel(
                 orig_df.copy(),
                 config=kernel_conf,
