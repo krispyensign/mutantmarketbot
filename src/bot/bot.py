@@ -9,7 +9,7 @@ import v20  # type: ignore
 import pandas as pd
 
 from bot.backtest import ChartConfig, PerfTimer, get_git_info
-from core.kernel import ASK_COLUMN, KernelConfig, kernel
+from core.kernel import EdgeCategory, KernelConfig, kernel
 from bot.reporting import report
 from bot.exchange import (
     close_trade,
@@ -59,30 +59,24 @@ def bot_run(  # noqa: PLR0911
     if observe_only:
         return trade_id, df, None
 
-    # get the current time
+    # check if the current time is greater than the recent last time
     current_time = datetime.now(tz=recent_last_time.tzinfo).replace(
         second=0, microsecond=0
     )
-
-    # if no trades are open then resync if necessary
-    if kernel_conf.is_deterministic or trade_id == -1:
-        if trade_id == -1 and current_time.minute % 5 != 0:
-            return trade_id, df, None
-
-        # check if the current time is greater than the recent last time
-        if (current_time - recent_last_time).total_seconds() > HALF_MINUTE:
-            return (
-                trade_id,
-                df,
-                Exception(f"curr:{current_time} last:{recent_last_time}"),
-            )
+    is_strict = get_is_strict(kernel_conf, trade_id)
+    if is_strict and (current_time - recent_last_time).total_seconds() > HALF_MINUTE:
+        return (
+            trade_id,
+            df,
+            Exception(f"curr:{current_time} last:{recent_last_time}"),
+        )
 
     # place order
     try:
-        rec = df.iloc[-1] if kernel_conf.edge else df.iloc[-2]
+        rec = get_rec(kernel_conf, trade_id, df)
         if rec.trigger == 1 and trade_id == -1:
-            if not kernel_conf.is_deterministic:
-                take_profit_price = rec.atr * kernel_conf.take_profit + rec[ASK_COLUMN]
+            if kernel_conf.edge == EdgeCategory.Bleeding:
+                take_profit_price = rec.atr * kernel_conf.take_profit + rec["wma"]
                 trade_id = place_order(
                     ctx,
                     trade_conf.amount,
@@ -105,6 +99,26 @@ def bot_run(  # noqa: PLR0911
         return trade_id, df, err
 
     return trade_id, df, None
+
+
+def get_is_strict(kernel_conf, trade_id):
+    """Get the strictness of the bot."""
+    is_strict = not (kernel_conf.edge == EdgeCategory.Bleeding and trade_id != -1)
+    return is_strict
+
+
+def get_rec(kernel_conf, trade_id, df):
+    """Get the last valid record of the DataFrame."""
+    if kernel_conf.edge == EdgeCategory.Bleeding:
+        rec = df.iloc[-1]
+    elif kernel_conf.edge in [EdgeCategory.Fast, EdgeCategory.Quasi]:
+        if trade_id == -1:
+            rec = df.iloc[-2]
+        else:
+            rec = df.iloc[-1]
+    else:
+        rec = df.iloc[-2]
+    return rec
 
 
 def bot(  # noqa: PLR0913
@@ -188,7 +202,7 @@ def bot(  # noqa: PLR0913
         if observe_only:
             break
 
-        if trade_id != -1 and not kernel_conf.is_deterministic:
+        if trade_id != -1 and kernel_conf.edge == EdgeCategory.Fast:
             sleep(1)
             continue
 
