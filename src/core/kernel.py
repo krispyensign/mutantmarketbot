@@ -63,8 +63,8 @@ class KernelConfig:
             and "open" in self.signal_exit_column
         ):
             return EdgeCategory.Quasi
-        elif "open" in self.source_column and "low" in self.signal_exit_column:
-            return EdgeCategory.Fast
+        # elif "open" in self.source_column and "low" in self.signal_exit_column:
+        #     return EdgeCategory.Fast
         else:
             return EdgeCategory.Deterministic
 
