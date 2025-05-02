@@ -9,7 +9,7 @@ import pandas as pd
 import v20  # type: ignore
 from alive_progress import alive_it  # type: ignore
 
-from core.kernel import KernelConfig, kernel, EdgeCategory
+from core.kernel import KernelConfig, kernel
 from bot.exchange import (
     getOandaOHLC,
     OandaContext,
@@ -88,7 +88,7 @@ class BacktestConfig:
     take_profit: list[float]
     stop_loss: list[float]
     source_columns: list[str]
-    deterministic: bool = False
+    verifier: str
 
     def get_column_pairs(self) -> tuple[itertools.product, int]:
         """Get column pairs."""
@@ -156,6 +156,18 @@ def backtest(  # noqa: C901, PLR0915
         chart_config.granularity,
     )
 
+    verifier_ctx = OandaContext(
+        v20.Context("api-fxpractice.oanda.com", token=token),
+        None,
+        token,
+        backtest_config.verifier,
+    )
+    verifier_df_orig = getOandaOHLC(
+        verifier_ctx,
+        count=chart_config.candle_count,
+        granularity=chart_config.granularity,
+    )
+
     best_df: pd.DataFrame | None = None
     best_rec: pd.Series[Any] | None = None
     best_conf: KernelConfig | None = None
@@ -163,6 +175,7 @@ def backtest(  # noqa: C901, PLR0915
     column_pairs, column_pair_len = backtest_config.get_column_pairs()
     logger.info(f"total_combinations: {column_pair_len}")
     total_found = 0
+    best_total = -99.9
     with PerfTimer(start_time, logger):
         for (
             source_column_name,
@@ -179,10 +192,6 @@ def backtest(  # noqa: C901, PLR0915
                 take_profit=take_profit_multiplier,
                 stop_loss=stop_loss_multiplier,
             )
-            if (
-                backtest_config.deterministic and not kernel_conf.edge == EdgeCategory.Deterministic
-            ):
-                continue
             df = kernel(
                 orig_df.copy(),
                 config=kernel_conf,
@@ -197,7 +206,6 @@ def backtest(  # noqa: C901, PLR0915
             if (
                 rec.wins == 0
                 or rec.exit_total < 0
-                or rec.running_total < 0
                 or (
                     rec.min_exit_total < 0
                     and abs(rec.min_exit_total) > abs(rec.exit_total)
@@ -205,21 +213,46 @@ def backtest(  # noqa: C901, PLR0915
             ):
                 continue
 
+            verifier_df = kernel(
+                verifier_df_orig.copy(),
+                config=kernel_conf,
+            )
+            vrec = verifier_df.iloc[-1]
+            if (
+                vrec.wins == 0
+                or vrec.exit_total < 0
+                or (
+                    vrec.min_exit_total < 0
+                    and abs(vrec.min_exit_total) > abs(vrec.exit_total)
+                )
+            ):
+                continue
+
             total_found += 1
-            better_total = rec.exit_total >= best_rec.exit_total
-            if better_total:
+            total = (
+                rec.exit_total
+                + rec.min_exit_total
+                + vrec.exit_total
+                + vrec.min_exit_total
+            )
+            if total >= best_total:
                 logger.debug(
-                    "new max found qtotal:%s qmin:%s emin:%s w:%s l:%s %s",
+                    "new max found t:%s qt:%s qm:%s vt:%s vm:%s qe:%s ve:%s w:%s l:%s %s",
+                    round(total, 5),
                     round(rec.exit_total, 5),
                     round(rec.min_exit_total, 5),
-                    round(df.exit_value.min(), 5),
-                    rec.wins,
-                    rec.losses,
+                    round(vrec.exit_total, 5),
+                    round(vrec.min_exit_total, 5),
+                    round(df["exit_value"].min(), 5),
+                    round(verifier_df["exit_value"].min(), 5),
+                    vrec.wins + rec.wins,
+                    vrec.losses + rec.losses,
                     kernel_conf,
                 )
                 best_rec = rec
                 best_conf = kernel_conf
                 best_df = df.copy()
+                best_total = total
 
     logger.info("total_found: %s", total_found)
     if total_found == 0:
