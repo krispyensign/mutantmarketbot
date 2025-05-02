@@ -40,7 +40,7 @@ class KernelConfig:
     stop_loss: float = 0.0
 
     @cached_property
-    def edge(self):
+    def edge(self) -> EdgeCategory:
         """Return the edge of the kernel.
 
         Returns
@@ -60,7 +60,7 @@ class KernelConfig:
 
 
     @cached_property
-    def ask_column(self):
+    def ask_column(self) -> str:
         """Return the name of the column in the DataFrame for the ask prices.
 
         Returns
@@ -75,7 +75,7 @@ class KernelConfig:
         return "ask_close"
 
     @cached_property
-    def bid_column(self):
+    def bid_column(self) -> str:
         """Return the name of the column in the DataFrame for the bid prices.
 
         Returns
