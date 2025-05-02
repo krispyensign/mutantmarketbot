@@ -1,6 +1,7 @@
 """Functions for processing and generating trading signals."""
 
 from dataclasses import dataclass
+from functools import cached_property
 from typing import Any
 import talib
 import pandas as pd
@@ -13,13 +14,20 @@ from core.calc import (
     stop_loss as sl,
 )
 
+from enum import Enum
+
 import numpy as np
 from numpy.typing import NDArray
 from numba import jit  # type: ignore
 
-ASK_COLUMN = "ask_close"
-BID_COLUMN = "bid_close"
-EDGE_BID_COLUMN = "bid_open"
+
+class EdgeCategory(Enum):
+    """Enumeration class for edge categories."""
+
+    Bleeding = 1
+    Quasi = 2
+    Fast = 3
+    Deterministic = 4
 
 
 @dataclass
@@ -30,17 +38,67 @@ class KernelConfig:
     signal_exit_column: str = ""
     source_column: str = ""
     wma_period: int = 20
-    take_profit: float = 0
-    stop_loss: float = 0
+    take_profit: float = 0.0
+    stop_loss: float = 0.0
 
-    @property
-    def edge(self) -> bool:
-        """Return the edge column."""
-        return (
+    @cached_property
+    def edge(self) -> EdgeCategory:
+        """Return the edge of the kernel.
+
+        Returns
+        -------
+        float
+            The edge of the kernel.
+
+        """
+        if (
             "open" in self.source_column
             and "open" in self.signal_buy_column
             and "open" in self.signal_exit_column
-        )
+        ):
+            return EdgeCategory.Bleeding
+        elif (
+            "open" in self.source_column
+            and "open" not in self.signal_buy_column
+            and "open" in self.signal_exit_column
+        ):
+            return EdgeCategory.Quasi
+        elif "open" in self.source_column and "low" in self.signal_exit_column:
+            return EdgeCategory.Fast
+        else:
+            return EdgeCategory.Deterministic
+
+    @cached_property
+    def ask_column(self) -> str:
+        """Return the name of the column in the DataFrame for the ask prices.
+
+        Returns
+        -------
+        str
+            The name of the column in the DataFrame for the ask prices.
+
+        """
+        if self.edge == EdgeCategory.Bleeding:
+            return "ask_open"
+
+        return "ask_close"
+
+    @cached_property
+    def bid_column(self) -> str:
+        """Return the name of the column in the DataFrame for the bid prices.
+
+        Returns
+        -------
+        str
+            The name of the column in the DataFrame for the bid prices.
+
+        """
+        if self.edge == EdgeCategory.Deterministic:
+            return "bid_close"
+        elif self.edge == EdgeCategory.Fast:
+            return "wma"
+        else:
+            return "bid_open"
 
     def __str__(self):
         """Return a string representation of the SignalConfig object."""
@@ -48,16 +106,34 @@ class KernelConfig:
 
 
 @jit(nopython=True)
-def wma_deterministic_signals(
-    buy_data: NDArray[Any],
-    exit_data: NDArray[Any],
-    wma_data: NDArray[Any],
-) -> tuple[NDArray[Any], NDArray[Any]]:
+def wma_exit_signals(
+    buy_data: NDArray[np.float64],
+    exit_data: NDArray[np.float64],
+    wma_data: NDArray[np.float64],
+) -> tuple[NDArray[np.int64], NDArray[np.int64]]:
     """Calculate the weighted moving average."""
-    signals = np.where((buy_data > wma_data), 1, 0)
-    trigger = np.diff(signals)
+    signals = np.zeros(len(buy_data)).astype(np.bool_)
+    buy_signals = np.where(buy_data > wma_data, np.True_, np.False_)
+    exit_signals = np.where(exit_data > wma_data, np.True_, np.False_)
+    for i in range(1, len(buy_signals)):
+        An1 = buy_signals[i - 1]
+        An = buy_signals[i]
+        B = exit_signals[i]
+        signals[i] = not An1 and An or An1 and B
+
+    trigger = np.diff(signals.astype(np.int64))
     trigger = np.concatenate((np.zeros(1), trigger))
-    signals = np.where((exit_data < wma_data) & (trigger != 1), 0, signals)
+
+    return signals.astype(np.int64), trigger.astype(np.int64)
+
+
+@jit(nopython=True)
+def wma_signals_no_exit(
+    buy_data: NDArray[np.float64],
+    wma_data: NDArray[np.float64],
+) -> tuple[NDArray[np.int64], NDArray[np.int64]]:
+    """Calculate the weighted moving average."""
+    signals = np.where(buy_data > wma_data, 1, 0)
     trigger = np.diff(signals)
     trigger = np.concatenate((np.zeros(1), trigger))
 
@@ -74,6 +150,8 @@ def kernel_stage_1(  # noqa: PLR0913
     atr: NDArray[Any],
     take_profit_conf: np.float64,
     stop_loss_conf: np.float64,
+    use_exit: np.bool,
+    erase: np.bool,
 ):
     """Perform the first stage of the kernel.
 
@@ -100,6 +178,10 @@ def kernel_stage_1(  # noqa: PLR0913
         The take profit value as a multiplier of the atr.
     stop_loss_conf : float
         The stop loss value as a multiplier of the atr.
+    use_exit : bool
+        Whether to use exit data or not.
+    erase: bool
+        Whether to erase trades or not.
 
     Returns
     -------
@@ -112,11 +194,14 @@ def kernel_stage_1(  # noqa: PLR0913
     # 0 0 1 1 1 0 0 - 1 above or 0 below the wma
     # 0 0 1 0 0 -1 0 - diff gives actual trigger
     # NOTE: usage of close prices differs online than in offline trading
-    signal, trigger = wma_deterministic_signals(
-        buy_data,
-        exit_data,
-        wma_data,
-    )
+    if use_exit:
+        signal, trigger = wma_exit_signals(
+            buy_data,
+            exit_data,
+            wma_data,
+        )
+    else:
+        signal, trigger = wma_signals_no_exit(buy_data, wma_data)
 
     # calculate the entry prices:
     position_value = entry_price(
@@ -155,6 +240,11 @@ def kernel_stage_1(  # noqa: PLR0913
             signal,
             trigger,
         )
+
+    if erase:
+        for i in range(3, len(signal)):
+            if signal[i - 2] == 0 and signal[i - 1] == 1 and signal[i - 0] == 0:
+                signal[i - 1] = 0
 
     return signal, trigger, position_value
 
@@ -226,16 +316,17 @@ def kernel(
     df["wma"] = talib.WMA(df[config.source_column].to_numpy(), config.wma_period)
 
     # calculate the entry and exit signals
-    bid_name = EDGE_BID_COLUMN if config.edge else BID_COLUMN
     df["signal"], df["trigger"], df["position_value"] = kernel_stage_1(
         df[config.signal_buy_column].to_numpy(),
         df[config.signal_exit_column].to_numpy(),
         df["wma"].to_numpy(),
-        df[ASK_COLUMN].to_numpy(),
-        df[bid_name].to_numpy(),
+        df[config.ask_column].to_numpy(),
+        df[config.bid_column].to_numpy(),
         df["atr"].to_numpy(),
         config.take_profit,
         config.stop_loss,
+        config.signal_buy_column != config.signal_exit_column,
+        config.edge == EdgeCategory.Quasi,
     )
 
     # calculate the exit total

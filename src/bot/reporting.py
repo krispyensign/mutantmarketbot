@@ -4,7 +4,7 @@ from datetime import timedelta
 import pandas as pd
 import logging
 
-from core.kernel import ASK_COLUMN, BID_COLUMN, EDGE_BID_COLUMN, KernelConfig
+from core.kernel import KernelConfig
 
 
 def report(
@@ -28,7 +28,6 @@ def report(
 
     """
     logger = logging.getLogger("reporting")
-    bid_name = EDGE_BID_COLUMN if kernel_conf.edge else BID_COLUMN
     df_ticks = df.reset_index()[
         [
             "signal",
@@ -37,8 +36,8 @@ def report(
             "wma",
             kernel_conf.signal_buy_column,
             kernel_conf.signal_exit_column,
-            ASK_COLUMN,
-            bid_name,
+            kernel_conf.ask_column,
+            kernel_conf.bid_column,
             "position_value",
             "exit_value",
             "running_total",

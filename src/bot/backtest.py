@@ -9,7 +9,7 @@ import pandas as pd
 import v20  # type: ignore
 from alive_progress import alive_it  # type: ignore
 
-from core.kernel import KernelConfig, kernel
+from core.kernel import KernelConfig, kernel, EdgeCategory
 from bot.exchange import (
     getOandaOHLC,
     OandaContext,
@@ -88,6 +88,7 @@ class BacktestConfig:
     take_profit: list[float]
     stop_loss: list[float]
     source_columns: list[str]
+    deterministic: bool = False
 
     def get_column_pairs(self) -> tuple[itertools.product, int]:
         """Get column pairs."""
@@ -178,6 +179,10 @@ def backtest(  # noqa: C901, PLR0915
                 take_profit=take_profit_multiplier,
                 stop_loss=stop_loss_multiplier,
             )
+            if (
+                backtest_config.deterministic and not kernel_conf.edge == EdgeCategory.Deterministic
+            ):
+                continue
             df = kernel(
                 orig_df.copy(),
                 config=kernel_conf,
@@ -188,26 +193,23 @@ def backtest(  # noqa: C901, PLR0915
                 best_conf = kernel_conf
                 best_df = df.copy()
 
-            # if there are no wins, the total is worse, or the min total is worse then continue
+            # if there are no wins, the total is worse, or the min total is worse then skip
             if (
                 rec.wins == 0
                 or rec.exit_total < 0
-                or rec.min_exit_total < 0
-                and abs(rec.min_exit_total) > abs(rec.exit_total)
+                or rec.running_total < 0
+                or (
+                    rec.min_exit_total < 0
+                    and abs(rec.min_exit_total) > abs(rec.exit_total)
+                )
             ):
                 continue
 
-            # if there are no losses, or the win ratio is better, or the total is better
-            # then record it
             total_found += 1
-            no_losses = rec.losses == 0 and best_rec.losses == 0
-            better_win_ratio = rec.wins / (rec.wins + rec.losses) >= best_rec.wins / (
-                best_rec.wins + best_rec.losses
-            )
             better_total = rec.exit_total >= best_rec.exit_total
-            if (no_losses or better_win_ratio) and better_total:
+            if better_total:
                 logger.debug(
-                    "new max found q:%s qmin:%s emin:%s w:%s l:%s %s",
+                    "new max found qtotal:%s qmin:%s emin:%s w:%s l:%s %s",
                     round(rec.exit_total, 5),
                     round(rec.min_exit_total, 5),
                     round(df.exit_value.min(), 5),

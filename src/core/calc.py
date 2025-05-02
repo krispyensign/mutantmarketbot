@@ -107,7 +107,7 @@ def stop_loss(
         A tuple containing the updated signal and the trigger arrays.
 
     """
-    stop_loss_array = stop_loss_value * atr
+    stop_loss_array = -stop_loss_value * atr
     signal = np.where(position_value < stop_loss_array, 0, signal)
     trigger = np.diff(signal)
     trigger = np.concatenate((np.zeros(1), trigger))
