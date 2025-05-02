@@ -9,7 +9,7 @@ import pandas as pd
 import v20  # type: ignore
 from alive_progress import alive_it  # type: ignore
 
-from core.kernel import KernelConfig, kernel
+from core.kernel import KernelConfig, kernel, EdgeCategory
 from bot.exchange import (
     getOandaOHLC,
     OandaContext,
@@ -180,9 +180,7 @@ def backtest(  # noqa: C901, PLR0915
                 stop_loss=stop_loss_multiplier,
             )
             if (
-                backtest_config.deterministic
-                and kernel_conf.edge
-                and not kernel_conf.true_edge
+                backtest_config.deterministic and not kernel_conf.edge == EdgeCategory.Deterministic
             ):
                 continue
             df = kernel(
