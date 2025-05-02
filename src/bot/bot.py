@@ -71,13 +71,16 @@ def bot_run(  # noqa: PLR0911
 
         # check if the current time is greater than the recent last time
         if (current_time - recent_last_time).total_seconds() > HALF_MINUTE:
-            return trade_id, df, Exception(f"curr:{current_time} last:{recent_last_time}")
+            return (
+                trade_id,
+                df,
+                Exception(f"curr:{current_time} last:{recent_last_time}"),
+            )
 
     # place order
     try:
         rec = df.iloc[-1] if kernel_conf.edge else df.iloc[-2]
         if rec.trigger == 1 and trade_id == -1:
-
             if not kernel_conf.is_deterministic:
                 take_profit_price = rec.atr * kernel_conf.take_profit + rec[ASK_COLUMN]
                 trade_id = place_order(

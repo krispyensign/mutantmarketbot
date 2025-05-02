@@ -179,7 +179,11 @@ def backtest(  # noqa: C901, PLR0915
                 take_profit=take_profit_multiplier,
                 stop_loss=stop_loss_multiplier,
             )
-            if backtest_config.deterministic and kernel_conf.edge and not kernel_conf.true_edge:
+            if (
+                backtest_config.deterministic
+                and kernel_conf.edge
+                and not kernel_conf.true_edge
+            ):
                 continue
             df = kernel(
                 orig_df.copy(),

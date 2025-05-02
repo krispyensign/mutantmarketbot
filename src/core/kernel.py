@@ -20,6 +20,7 @@ import numpy as np
 from numpy.typing import NDArray
 from numba import jit  # type: ignore
 
+
 class EdgeCategory(Enum):
     """Enumeration class for edge categories."""
 
@@ -27,6 +28,7 @@ class EdgeCategory(Enum):
     Quasi = 2
     Fast = 3
     Deterministic = 4
+
 
 @dataclass
 class KernelConfig:
@@ -49,15 +51,22 @@ class KernelConfig:
             The edge of the kernel.
 
         """
-        if "open" in self.source_column and "open" in self.signal_buy_column and "open" in self.signal_exit_column:
+        if (
+            "open" in self.source_column
+            and "open" in self.signal_buy_column
+            and "open" in self.signal_exit_column
+        ):
             return EdgeCategory.Bleeding
-        elif "open" in self.source_column and "open" not in self.signal_buy_column and "open" in self.signal_exit_column:
+        elif (
+            "open" in self.source_column
+            and "open" not in self.signal_buy_column
+            and "open" in self.signal_exit_column
+        ):
             return EdgeCategory.Quasi
         elif "open" in self.source_column and "low" in self.signal_exit_column:
             return EdgeCategory.Fast
         else:
             return EdgeCategory.Deterministic
-
 
     @cached_property
     def ask_column(self) -> str:
@@ -236,7 +245,6 @@ def kernel_stage_1(  # noqa: PLR0913
         for i in range(3, len(signal)):
             if signal[i - 2] == 0 and signal[i - 1] == 1 and signal[i - 0] == 0:
                 signal[i - 1] = 0
-
 
     return signal, trigger, position_value
 
