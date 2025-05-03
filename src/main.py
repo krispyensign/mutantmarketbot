@@ -50,9 +50,11 @@ if __name__ == "__main__":
 
         # run
         result = backtest(chart_conf, kernel_conf, TOKEN, backtest_conf)
-        logger.info(result)
         if result is None:
             sys.exit(1)
+
+        logger.info(result[0].kernel_conf)
+        logger.info(result[1].kernel_conf)
 
     elif sys.argv[1] in ["bot", "observe"]:
         # load config

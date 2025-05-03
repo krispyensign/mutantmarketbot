@@ -75,21 +75,11 @@ def bot_run(  # noqa: PLR0911
     try:
         rec = get_rec(kernel_conf, trade_id, df)
         if rec.trigger == 1 and trade_id == -1:
-            if kernel_conf.edge == EdgeCategory.Bleeding:
-                take_profit_price = rec.atr * kernel_conf.take_profit + rec["wma"]
-                trade_id = place_order(
-                    ctx,
-                    trade_conf.amount,
-                    trade_conf.bot_id,
-                    take_profit=take_profit_price,
-                    trailing_distance=rec.atr * kernel_conf.stop_loss,
-                )
-            else:
-                trade_id = place_order(
-                    ctx,
-                    trade_conf.amount,
-                    trade_conf.bot_id,
-                )
+            trade_id = place_order(
+                ctx,
+                trade_conf.amount,
+                trade_conf.bot_id,
+            )
         # close order
         elif (rec.trigger == -1 and trade_id != -1) or (
             rec.trigger == 0 and rec.signal == 0 and trade_id != -1
@@ -103,13 +93,13 @@ def bot_run(  # noqa: PLR0911
 
 def get_is_strict(kernel_conf, trade_id):
     """Get the strictness of the bot."""
-    is_strict = not (kernel_conf.edge == EdgeCategory.Bleeding and trade_id != -1)
+    is_strict = not (kernel_conf.edge == EdgeCategory.Latest and trade_id != -1)
     return is_strict
 
 
 def get_rec(kernel_conf, trade_id, df):
     """Get the last valid record of the DataFrame."""
-    if kernel_conf.edge == EdgeCategory.Bleeding:
+    if kernel_conf.edge == EdgeCategory.Latest:
         rec = df.iloc[-1]
     elif kernel_conf.edge in [EdgeCategory.Fast, EdgeCategory.Quasi]:
         if trade_id == -1:

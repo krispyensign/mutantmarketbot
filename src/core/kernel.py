@@ -24,7 +24,7 @@ from numba import jit  # type: ignore
 class EdgeCategory(Enum):
     """Enumeration class for edge categories."""
 
-    Bleeding = 1
+    Latest = 1
     Quasi = 2
     Fast = 3
     Deterministic = 4
@@ -56,15 +56,15 @@ class KernelConfig:
             and "open" in self.signal_buy_column
             and "open" in self.signal_exit_column
         ):
-            return EdgeCategory.Bleeding
+            return EdgeCategory.Latest
         elif (
             "open" in self.source_column
             and "open" not in self.signal_buy_column
             and "open" in self.signal_exit_column
         ):
             return EdgeCategory.Quasi
-        elif "open" in self.source_column and "low" in self.signal_exit_column:
-            return EdgeCategory.Fast
+        # elif "open" in self.source_column and "low" in self.signal_exit_column:
+        #     return EdgeCategory.Fast
         else:
             return EdgeCategory.Deterministic
 
@@ -78,8 +78,10 @@ class KernelConfig:
             The name of the column in the DataFrame for the ask prices.
 
         """
-        if self.edge == EdgeCategory.Bleeding:
+        if self.edge == EdgeCategory.Latest:
             return "ask_open"
+        # elif self.edge == EdgeCategory.Fast:
+        #     return ""
 
         return "ask_close"
 
@@ -95,8 +97,8 @@ class KernelConfig:
         """
         if self.edge == EdgeCategory.Deterministic:
             return "bid_close"
-        elif self.edge == EdgeCategory.Fast:
-            return "wma"
+        # elif self.edge == EdgeCategory.Fast:
+        #     return "bid_low"
         else:
             return "bid_open"
 
