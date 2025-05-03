@@ -196,7 +196,7 @@ def backtest(  # noqa: C901, PLR0915
             # if there are no wins, the total is worse, or the min total is worse then skip
             if _is_invalid_rec(rec):
                 continue
-            
+
             total_found += 1
             total = rec.exit_total + found[0].rec.exit_total
             if total >= best_total:
