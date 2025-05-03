@@ -4,12 +4,11 @@ from dataclasses import dataclass
 from datetime import datetime
 import itertools
 import subprocess
-from typing import Any
 import pandas as pd
 import v20  # type: ignore
 from alive_progress import alive_it  # type: ignore
 
-from core.kernel import KernelConfig, kernel, EdgeCategory
+from core.kernel import KernelConfig, kernel
 from bot.exchange import (
     getOandaOHLC,
     OandaContext,
@@ -89,7 +88,6 @@ class BacktestConfig:
     stop_loss: list[float]
     source_columns: list[str]
     verifier: str
-    disable_fast: bool
 
     def get_column_pairs(self) -> tuple[itertools.product, int]:
         """Get column pairs."""
@@ -102,12 +100,21 @@ class BacktestConfig:
         ), len(self.source_columns) ** 3 * len(self.take_profit) * len(self.stop_loss)
 
 
+@dataclass
+class BacktestResult:
+    """BacktestResult class."""
+
+    kernel_conf: KernelConfig
+    best_df: pd.DataFrame
+    rec: pd.Series
+
+
 def backtest(  # noqa: C901, PLR0915
     chart_config: ChartConfig,
     kernel_conf_in: KernelConfig,
     token: str,
     backtest_config: BacktestConfig,
-) -> KernelConfig | None:
+) -> tuple[BacktestResult, BacktestResult] | None:
     """Run a backtest of the trading strategy.
 
     Parameters
@@ -141,6 +148,113 @@ def backtest(  # noqa: C901, PLR0915
         return None
     logger.info("git info: %s %s", git_info[0], git_info[1])
     start_time = datetime.now()
+    orig_df, verifier_df_orig = _get_data(chart_config, token, backtest_config, logger)
+
+    best_result: tuple[BacktestResult, BacktestResult] | None = None
+
+    column_pairs, column_pair_len = backtest_config.get_column_pairs()
+    logger.info(f"total_combinations: {column_pair_len}")
+    total_found = 0
+    found_results: list[BacktestResult] = []
+    best_total = 0.0
+    with PerfTimer(start_time, logger):
+        for config_tuple in alive_it(column_pairs, total=column_pair_len):
+            kernel_conf = _map_kernel_conf(kernel_conf_in, config_tuple)
+            df = kernel(
+                orig_df.copy(),
+                config=kernel_conf,
+            )
+            rec = df.iloc[-1]
+
+            # if there are no wins, the total is worse, or the min total is worse then skip
+            if _is_invalid_rec(rec):
+                continue
+
+            # if this configuration has already been found, skip
+            found_results.append(
+                BacktestResult(
+                    kernel_conf=kernel_conf,
+                    best_df=df,
+                    rec=rec,
+                )
+            )
+
+            total_found += 1
+            _log_found(logger, df, rec)
+            total = rec.exit_total
+
+        found_filters = _generate_filters(
+            kernel_conf_in, backtest_config, found_results
+        )
+        for found in alive_it(found_filters, total=len(found_filters)):
+            df = kernel(
+                verifier_df_orig.copy(),
+                config=found[1],
+            )
+            rec = df.iloc[-1]
+
+            # if there are no wins, the total is worse, or the min total is worse then skip
+            if _is_invalid_rec(rec):
+                continue
+
+            
+            total_found += 1
+            total = rec.exit_total + found[0].rec.exit_total
+            if total >= best_total:
+                _log_new_max(logger, df, rec, found, total)
+                best_result = (
+                    found[0],
+                    BacktestResult(
+                        kernel_conf=found[1],
+                        best_df=df,
+                        rec=rec,
+                    ),
+                )
+                best_total = total
+            else:
+                _log_found(logger, df, rec)
+
+    logger.info("total_found: %s", total_found)
+    if total_found == 0:
+        logger.error("no combinations found")
+        return None
+
+    if best_result is not None:
+        q_res, v_res = best_result
+        report(q_res.best_df, chart_config.instrument, q_res.kernel_conf, 5)
+        report(v_res.best_df, backtest_config.verifier, v_res.kernel_conf, 5)
+    else:
+        logger.error("no best found")
+        return None
+
+    return best_result
+
+
+def _map_kernel_conf(kernel_conf_in, config_tuple):
+    kernel_conf = KernelConfig(
+        wma_period=kernel_conf_in.wma_period,
+        signal_buy_column=config_tuple[0],
+        signal_exit_column=config_tuple[1],
+        source_column=config_tuple[2],
+        take_profit=config_tuple[3],
+        stop_loss=config_tuple[4],
+    )
+
+    return kernel_conf
+
+
+def _log_found(logger, df, rec):
+    logger.debug(
+        "found qt:%s qm:%s qe:%s w:%s l:%s",
+        rec.exit_total,
+        rec.min_exit_total,
+        df["exit_value"].min(),
+        rec.wins,
+        rec.losses,
+    )
+
+
+def _get_data(chart_config, token, backtest_config, logger):
     ctx = OandaContext(
         v20.Context("api-fxpractice.oanda.com", token=token),
         None,
@@ -169,110 +283,51 @@ def backtest(  # noqa: C901, PLR0915
         granularity=chart_config.granularity,
     )
 
-    best_df: pd.DataFrame | None = None
-    best_rec: pd.Series[Any] | None = None
-    best_conf: KernelConfig | None = None
+    return orig_df, verifier_df_orig
 
-    column_pairs, column_pair_len = backtest_config.get_column_pairs()
-    logger.info(f"total_combinations: {column_pair_len}")
-    total_found = 0
-    best_total = -99.9
-    with PerfTimer(start_time, logger):
-        for (
-            source_column_name,
-            signal_buy_column_name,
-            signal_exit_column_name,
-            take_profit_multiplier,
-            stop_loss_multiplier,
-        ) in alive_it(column_pairs, total=column_pair_len):
-            kernel_conf = KernelConfig(
-                signal_buy_column=signal_buy_column_name,
-                signal_exit_column=signal_exit_column_name,
-                source_column=source_column_name,
-                wma_period=kernel_conf_in.wma_period,
-                take_profit=take_profit_multiplier,
-                stop_loss=stop_loss_multiplier,
-            )
-            if backtest_config.disable_fast and kernel_conf.edge == EdgeCategory.Fast:
-                continue
-            df = kernel(
-                orig_df.copy(),
-                config=kernel_conf,
-            )
-            rec = df.iloc[-1]
-            if best_rec is None or best_conf is None or best_df is None:
-                best_rec = rec
-                best_conf = kernel_conf
-                best_df = df.copy()
 
-            # if there are no wins, the total is worse, or the min total is worse then skip
-            if (
-                rec.wins == 0
-                or rec.exit_total < 0
-                or (
-                    rec.min_exit_total < 0
-                    and abs(rec.min_exit_total) > abs(rec.exit_total)
-                )
-            ):
-                continue
-
-            verifier_df = kernel(
-                verifier_df_orig.copy(),
-                config=kernel_conf,
-            )
-            vrec = verifier_df.iloc[-1]
-            if (
-                vrec.wins == 0
-                or vrec.exit_total < 0
-                or (
-                    vrec.min_exit_total < 0
-                    and abs(vrec.min_exit_total) > abs(vrec.exit_total)
-                )
-            ):
-                continue
-
-            total_found += 1
-            total = (
-                rec.exit_total
-                + rec.min_exit_total
-                + vrec.exit_total
-                + vrec.min_exit_total
-            )
-            if total >= best_total:
-                logger.debug(
-                    "new max found t:%s qt:%s qm:%s vt:%s vm:%s qe:%s ve:%s w:%s l:%s %s",
-                    round(total, 5),
-                    round(rec.exit_total, 5),
-                    round(rec.min_exit_total, 5),
-                    round(vrec.exit_total, 5),
-                    round(vrec.min_exit_total, 5),
-                    round(df["exit_value"].min(), 5),
-                    round(verifier_df["exit_value"].min(), 5),
-                    vrec.wins + rec.wins,
-                    vrec.losses + rec.losses,
-                    kernel_conf,
-                )
-                best_rec = rec
-                best_conf = kernel_conf
-                best_df = df.copy()
-                best_total = total
-
-    logger.info("total_found: %s", total_found)
-    if total_found == 0:
-        logger.error("no combinations found")
-        return None
-
+def _log_new_max(logger, df, rec, found, total):
     logger.debug(
-        "best max found %s %s",
-        best_conf,
-        best_rec,
+        "new vmax found t:%s qt:%s qm:%s qe:%s w:%s l:%s %s",
+        round(total, 5),
+        round(rec.exit_total, 5),
+        round(rec.min_exit_total, 5),
+        round(df["exit_value"].min(), 5),
+        rec.wins,
+        rec.losses,
+        found[1],
     )
-    if best_df is not None and best_conf is not None:
-        report(
-            best_df,
-            chart_config.instrument,
-            best_conf,
-            length=10,
-        )
 
-    return best_conf
+
+def _generate_filters(
+    kernel_conf_in: KernelConfig,
+    backtest_config: BacktestConfig,
+    found_results: list[BacktestResult],
+) -> list[tuple[BacktestResult, KernelConfig]]:
+    found_filters: list[tuple[BacktestResult, KernelConfig]] = []
+    for filter_result in found_results:
+        for tp in backtest_config.take_profit:
+            for sl in backtest_config.stop_loss:
+                found_filters.append(
+                    (
+                        filter_result,
+                        KernelConfig(
+                            filter_result.kernel_conf.signal_buy_column,
+                            filter_result.kernel_conf.signal_exit_column,
+                            filter_result.kernel_conf.source_column,
+                            kernel_conf_in.wma_period,
+                            tp,
+                            sl,
+                        ),
+                    )
+                )
+
+    return found_filters
+
+
+def _is_invalid_rec(rec):
+    return (
+        rec.wins == 0
+        or rec.exit_total < 0
+        or (rec.min_exit_total < 0 and abs(rec.min_exit_total) > abs(rec.exit_total))
+    )

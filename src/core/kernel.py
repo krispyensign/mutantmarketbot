@@ -63,8 +63,8 @@ class KernelConfig:
             and "open" in self.signal_exit_column
         ):
             return EdgeCategory.Quasi
-        elif "open" in self.source_column and "low" in self.signal_exit_column:
-            return EdgeCategory.Fast
+        # elif "open" in self.source_column and "low" in self.signal_exit_column:
+        #     return EdgeCategory.Fast
         else:
             return EdgeCategory.Deterministic
 
@@ -80,6 +80,8 @@ class KernelConfig:
         """
         if self.edge == EdgeCategory.Latest:
             return "ask_open"
+        # elif self.edge == EdgeCategory.Fast:
+        #     return ""
 
         return "ask_close"
 
@@ -95,8 +97,8 @@ class KernelConfig:
         """
         if self.edge == EdgeCategory.Deterministic:
             return "bid_close"
-        elif self.edge == EdgeCategory.Fast:
-            return "wma"
+        # elif self.edge == EdgeCategory.Fast:
+        #     return "bid_low"
         else:
             return "bid_open"
 
