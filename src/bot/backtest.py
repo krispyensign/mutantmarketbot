@@ -5,8 +5,9 @@ from datetime import datetime
 import itertools
 import subprocess
 import pandas as pd
+import talib
 import v20  # type: ignore
-from alive_progress import alive_it  # type: ignore
+from core.chart import heiken_ashi_numpy
 
 from core.kernel import KernelConfig, kernel
 from bot.exchange import (
@@ -149,22 +150,99 @@ def backtest(  # noqa: C901, PLR0915
     logger.info("git info: %s %s", git_info[0], git_info[1])
     start_time = datetime.now()
     orig_df, verifier_df_orig = _get_data(chart_config, token, backtest_config, logger)
+    # calculate the ATR for the trailing stop loss
+    orig_df["atr"] = talib.ATR(
+        orig_df["high"].to_numpy(),
+        orig_df["low"].to_numpy(),
+        orig_df["close"].to_numpy(),
+        timeperiod=kernel_conf_in.wma_period,
+    )
+    verifier_df_orig["atr"] = talib.ATR(
+        verifier_df_orig["high"].to_numpy(),
+        verifier_df_orig["low"].to_numpy(),
+        verifier_df_orig["close"].to_numpy(),
+        timeperiod=kernel_conf_in.wma_period,
+    )
+    # calculate the Heikin-Ashi candlesticks
+    orig_df["ha_open"], orig_df["ha_high"], orig_df["ha_low"], orig_df["ha_close"] = heiken_ashi_numpy(
+        orig_df["open"].to_numpy(),
+        orig_df["high"].to_numpy(),
+        orig_df["low"].to_numpy(),
+        orig_df["close"].to_numpy(),
+    )
+
+    # calculate the Heikin-Ashi candlesticks for the bid prices
+    orig_df["ha_bid_open"], orig_df["ha_bid_high"], orig_df["ha_bid_low"], orig_df["ha_bid_close"] = (
+        heiken_ashi_numpy(
+            orig_df["bid_open"].to_numpy(),
+            orig_df["bid_high"].to_numpy(),
+            orig_df["bid_low"].to_numpy(),
+            orig_df["bid_close"].to_numpy(),
+        )
+    )
+
+    # calculate the Heikin-Ashi candlesticks for the ask prices
+    orig_df["ha_ask_open"], orig_df["ha_ask_high"], orig_df["ha_ask_low"], orig_df["ha_ask_close"] = (
+        heiken_ashi_numpy(
+            orig_df["ask_open"].to_numpy(),
+            orig_df["ask_high"].to_numpy(),
+            orig_df["ask_low"].to_numpy(),
+            orig_df["ask_close"].to_numpy(),
+        )
+    )
+
+    # calculate the Heikin-Ashi candlesticks
+    verifier_df_orig["ha_open"], verifier_df_orig["ha_high"], verifier_df_orig["ha_low"], verifier_df_orig["ha_close"] = heiken_ashi_numpy(
+        verifier_df_orig["open"].to_numpy(),
+        verifier_df_orig["high"].to_numpy(),
+        verifier_df_orig["low"].to_numpy(),
+        verifier_df_orig["close"].to_numpy(),
+    )
+
+    # calculate the Heikin-Ashi candlesticks for the bid prices
+    verifier_df_orig["ha_bid_open"], verifier_df_orig["ha_bid_high"], verifier_df_orig["ha_bid_low"], verifier_df_orig["ha_bid_close"] = (
+        heiken_ashi_numpy(
+            verifier_df_orig["bid_open"].to_numpy(),
+            verifier_df_orig["bid_high"].to_numpy(),
+            verifier_df_orig["bid_low"].to_numpy(),
+            verifier_df_orig["bid_close"].to_numpy(),
+        )
+    )
+
+    # calculate the Heikin-Ashi candlesticks for the ask prices
+    verifier_df_orig["ha_ask_open"], verifier_df_orig["ha_ask_high"], verifier_df_orig["ha_ask_low"], verifier_df_orig["ha_ask_close"] = (
+        heiken_ashi_numpy(
+            verifier_df_orig["ask_open"].to_numpy(),
+            verifier_df_orig["ask_high"].to_numpy(),
+            verifier_df_orig["ask_low"].to_numpy(),
+            verifier_df_orig["ask_close"].to_numpy(),
+        )
+    )
 
     best_result: tuple[BacktestResult, BacktestResult] | None = None
-
     column_pairs, column_pair_len = backtest_config.get_column_pairs()
     logger.info(f"total_combinations: {column_pair_len}")
     total_found = 0
     found_results: list[BacktestResult] = []
     best_total = 0.0
+    count = 0
     with PerfTimer(start_time, logger):
-        for config_tuple in alive_it(column_pairs, total=column_pair_len):
+        for config_tuple in column_pairs:
+
             kernel_conf = _map_kernel_conf(kernel_conf_in, config_tuple)
+            wma = talib.WMA(orig_df[kernel_conf.source_column].to_numpy(), kernel_conf.wma_period)
+            df = orig_df.copy()
+            df["wma"] = wma
             df = kernel(
-                orig_df.copy(),
+                df,
                 config=kernel_conf,
             )
             rec = df.iloc[-1]
+            if count == 0:
+                logger.info("starting pass 1")
+            count += 1
+            if count % 100 == 0:
+                logger.info("heartbeat (pass 1): %s %s / %s",total_found, count, column_pair_len)
 
             # if there are no wins, the total is worse, or the min total is worse then skip
             if _is_invalid_rec(rec):
@@ -186,9 +264,13 @@ def backtest(  # noqa: C901, PLR0915
         found_filters = _generate_filters(
             kernel_conf_in, backtest_config, found_results
         )
-        for found in alive_it(found_filters, total=len(found_filters)):
+        count = 0
+        for found in found_filters:
+            wma = talib.WMA(verifier_df_orig[kernel_conf.source_column].to_numpy(), kernel_conf.wma_period)
+            df = verifier_df_orig.copy()
+            df["wma" ] = wma
             df = kernel(
-                verifier_df_orig.copy(),
+                df,
                 config=found[1],
             )
             rec = df.iloc[-1]
@@ -212,6 +294,9 @@ def backtest(  # noqa: C901, PLR0915
                 best_total = total
             else:
                 _log_found(logger, df, rec)
+            count += 1
+            if count % 100 == 0:
+                logger.info("heartbeat (pass 2): %s %s / %s",total_found, count, len(found_filters))
 
     logger.info("total_found: %s", total_found)
     if total_found == 0:

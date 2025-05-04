@@ -3,10 +3,8 @@
 from dataclasses import dataclass
 from functools import cached_property
 from typing import Any
-import talib
 import pandas as pd
 
-from core.chart import heiken_ashi_numpy
 from core.calc import (
     entry_price,
     exit_total,
@@ -99,6 +97,8 @@ def wma_exit_signals(
     buy_signals = np.where(buy_data > wma_data, np.True_, np.False_)
     exit_signals = np.where(exit_data > wma_data, np.True_, np.False_)
     for i in range(1, len(buy_signals)):
+
+        # apply wma
         An1 = buy_signals[i - 1]
         An = buy_signals[i]
         B = exit_signals[i]
@@ -256,48 +256,6 @@ def kernel(
         A DataFrame containing the processed trading data.
 
     """
-    if (
-        "ha" in config.signal_buy_column
-        or "ha" in config.signal_exit_column
-        or "ha" in config.source_column
-    ):
-        # calculate the Heikin-Ashi candlesticks
-        df["ha_open"], df["ha_high"], df["ha_low"], df["ha_close"] = heiken_ashi_numpy(
-            df["open"].to_numpy(),
-            df["high"].to_numpy(),
-            df["low"].to_numpy(),
-            df["close"].to_numpy(),
-        )
-
-        # calculate the Heikin-Ashi candlesticks for the bid prices
-        df["ha_bid_open"], df["ha_bid_high"], df["ha_bid_low"], df["ha_bid_close"] = (
-            heiken_ashi_numpy(
-                df["bid_open"].to_numpy(),
-                df["bid_high"].to_numpy(),
-                df["bid_low"].to_numpy(),
-                df["bid_close"].to_numpy(),
-            )
-        )
-
-        # calculate the Heikin-Ashi candlesticks for the ask prices
-        df["ha_ask_open"], df["ha_ask_high"], df["ha_ask_low"], df["ha_ask_close"] = (
-            heiken_ashi_numpy(
-                df["ask_open"].to_numpy(),
-                df["ask_high"].to_numpy(),
-                df["ask_low"].to_numpy(),
-                df["ask_close"].to_numpy(),
-            )
-        )
-
-    # calculate the ATR for the trailing stop loss
-    df["atr"] = talib.ATR(
-        df["high"].to_numpy(),
-        df["low"].to_numpy(),
-        df["close"].to_numpy(),
-        timeperiod=config.wma_period,
-    )
-    df["wma"] = talib.WMA(df[config.source_column].to_numpy(), config.wma_period)
-
     # calculate the entry and exit signals
     df["signal"], df["trigger"], df["position_value"] = kernel_stage_1(
         df[config.signal_buy_column].to_numpy(),

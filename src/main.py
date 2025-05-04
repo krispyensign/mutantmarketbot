@@ -10,6 +10,10 @@ from bot.backtest import BacktestConfig, ChartConfig, backtest
 from bot.bot import TradeConfig, bot
 from core.kernel import KernelConfig
 import os
+import cProfile
+import pstats
+import io
+from pstats import SortKey
 
 TOKEN = os.environ.get("OANDA_TOKEN")
 ACCOUNT_ID = os.environ.get("OANDA_ACCOUNT_ID")
@@ -49,7 +53,17 @@ if __name__ == "__main__":
         sl = conf["stop_loss"] if "stop_loss" in conf else [0.0]
 
         # run
-        result = backtest(chart_conf, kernel_conf, TOKEN, backtest_conf)
+        pr = cProfile.Profile()
+        pr.enable()
+        try:
+            result = backtest(chart_conf, kernel_conf, TOKEN, backtest_conf)
+        except KeyboardInterrupt:
+            pr.disable()
+            s = io.StringIO()
+            sortby = SortKey.CUMULATIVE
+            ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+            ps.print_stats(50)
+            print(s.getvalue())
         if result is None:
             sys.exit(1)
 
