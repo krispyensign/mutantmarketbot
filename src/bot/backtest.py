@@ -347,7 +347,7 @@ def _log_progress(
     if count == 0:
         logger.info("starting pass 1")
     count += 1
-    if count % 100 == 0:
+    if count % 1000 == 0:
         logger.info(
             "heartbeat (pass 1): %s %s / %s",
             total_found,
