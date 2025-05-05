@@ -313,13 +313,14 @@ def solve(
     found_results: list[BacktestResult] = []
     best_total = 0.0
     count = 0
+    filter_start_time = datetime.now()
 
     with PerfTimer(start_time, logger):
         df = orig_df.copy()
         for config_tuple in column_pairs:
             # log progress
             count = _log_progress(
-                logger, column_pair_len, total_found, count, APP_START_TIME
+                logger, column_pair_len, total_found, count, filter_start_time
             )
 
             # run
@@ -417,7 +418,7 @@ def _log_progress(
     if count == 0:
         logger.info("starting pass")
     count += 1
-    if count % 1000 == 0:
+    if count % 10000 == 0:
         time_now = datetime.now()
         time_diff = time_now - start_time
         throughput = count / time_diff.total_seconds()
