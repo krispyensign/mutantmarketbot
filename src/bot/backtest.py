@@ -1,14 +1,18 @@
 """Backtest the trading strategy."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 import itertools
 import subprocess
+import numpy as np
 import pandas as pd
+import talib
 import v20  # type: ignore
-from alive_progress import alive_it  # type: ignore
+from core.chart import heiken_ashi_numpy
+from numpy.typing import NDArray
+from numba import jit  # type: ignore
 
-from core.kernel import KernelConfig, kernel
+from core.kernel import EdgeCategory, KernelConfig, kernel_stage_1
 from bot.exchange import (
     getOandaOHLC,
     OandaContext,
@@ -16,12 +20,10 @@ from bot.exchange import (
 
 import logging
 
-from bot.reporting import report
-
 APP_START_TIME = datetime.now()
 
 
-def get_git_info() -> tuple[str, bool] | None:
+def get_git_info() -> tuple[str, bool, Exception | None]:
     """Get commit hash and whether the working tree is clean.
 
     Returns a tuple (str, bool). The first element is the commit hash. The second
@@ -30,7 +32,6 @@ def get_git_info() -> tuple[str, bool] | None:
 
     If there is an error (e.g., not in a Git repository), the function returns None.
     """
-    logger = logging.getLogger("backtest")
     try:
         # Get commit hash
         commit_hash = subprocess.check_output(
@@ -42,11 +43,9 @@ def get_git_info() -> tuple[str, bool] | None:
             ["git", "status", "--porcelain"], encoding="utf-8"
         ).strip()
 
-        return commit_hash, porcelain_status == ""
+        return commit_hash, porcelain_status == "", None
     except subprocess.CalledProcessError as e:
-        logger.error("Failed to get Git info: %s", e)
-        # Handle errors, e.g., when not in a Git repository
-        return None
+        return "", False, e
 
 
 class PerfTimer:
@@ -104,12 +103,159 @@ class BacktestConfig:
 class BacktestResult:
     """BacktestResult class."""
 
+    instrument: str
     kernel_conf: KernelConfig
-    best_df: pd.DataFrame
     rec: pd.Series
 
 
-def backtest(  # noqa: C901, PLR0915
+def preprocess(df: pd.DataFrame, wma_period: int) -> pd.DataFrame:
+    # calculate the ATR for the trailing stop loss
+    """Preprocess the DataFrame to calculate various technical indicators.
+
+    This function calculates the Average True Range (ATR), Weighted Moving Averages (WMA)
+    for open, high, low, and close prices, and Heikin-Ashi candlesticks for both original
+    and bid/ask prices in the given DataFrame.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        A DataFrame containing columns for open, high, low, close, ask, and bid prices.
+    wma_period : int
+        The period to be used for calculating the Weighted Moving Averages (WMA).
+
+    Returns
+    -------
+    pd.DataFrame
+        The input DataFrame with additional columns for ATR, WMA, and Heikin-Ashi
+        candlesticks.
+
+    """
+    df["atr"] = talib.ATR(
+        df["high"].to_numpy(),
+        df["low"].to_numpy(),
+        df["close"].to_numpy(),
+        timeperiod=wma_period,
+    )
+
+    df["wma_open"] = talib.WMA(df["open"].to_numpy(), timeperiod=wma_period)
+    df["wma_high"] = talib.WMA(df["high"].to_numpy(), timeperiod=wma_period)
+    df["wma_low"] = talib.WMA(df["low"].to_numpy(), timeperiod=wma_period)
+    df["wma_close"] = talib.WMA(df["close"].to_numpy(), timeperiod=wma_period)
+
+    df["wma_ask_open"] = talib.WMA(df["ask_open"].to_numpy(), timeperiod=wma_period)
+    df["wma_ask_high"] = talib.WMA(df["ask_high"].to_numpy(), timeperiod=wma_period)
+    df["wma_ask_low"] = talib.WMA(df["ask_low"].to_numpy(), timeperiod=wma_period)
+    df["wma_ask_close"] = talib.WMA(df["ask_close"].to_numpy(), timeperiod=wma_period)
+
+    df["wma_bid_open"] = talib.WMA(df["bid_open"].to_numpy(), timeperiod=wma_period)
+    df["wma_bid_high"] = talib.WMA(df["bid_high"].to_numpy(), timeperiod=wma_period)
+    df["wma_bid_low"] = talib.WMA(df["bid_low"].to_numpy(), timeperiod=wma_period)
+    df["wma_bid_close"] = talib.WMA(df["bid_close"].to_numpy(), timeperiod=wma_period)
+
+    # calculate the Heikin-Ashi candlesticks
+    df["ha_open"], df["ha_high"], df["ha_low"], df["ha_close"] = heiken_ashi_numpy(
+        df["open"].to_numpy(),
+        df["high"].to_numpy(),
+        df["low"].to_numpy(),
+        df["close"].to_numpy(),
+    )
+    df["wma_ha_open"] = talib.WMA(df["ha_open"].to_numpy(), timeperiod=wma_period)
+    df["wma_ha_high"] = talib.WMA(df["ha_high"].to_numpy(), timeperiod=wma_period)
+    df["wma_ha_low"] = talib.WMA(df["ha_low"].to_numpy(), timeperiod=wma_period)
+    df["wma_ha_close"] = talib.WMA(df["ha_close"].to_numpy(), timeperiod=wma_period)
+
+    # calculate the Heikin-Ashi candlesticks for the bid prices
+    df["ha_bid_open"], df["ha_bid_high"], df["ha_bid_low"], df["ha_bid_close"] = (
+        heiken_ashi_numpy(
+            df["bid_open"].to_numpy(),
+            df["bid_high"].to_numpy(),
+            df["bid_low"].to_numpy(),
+            df["bid_close"].to_numpy(),
+        )
+    )
+    df["wma_ha_bid_open"] = talib.WMA(
+        df["ha_bid_open"].to_numpy(), timeperiod=wma_period
+    )
+    df["wma_ha_bid_high"] = talib.WMA(
+        df["ha_bid_high"].to_numpy(), timeperiod=wma_period
+    )
+    df["wma_ha_bid_low"] = talib.WMA(df["ha_bid_low"].to_numpy(), timeperiod=wma_period)
+    df["wma_ha_bid_close"] = talib.WMA(
+        df["ha_bid_close"].to_numpy(), timeperiod=wma_period
+    )
+
+    # calculate the Heikin-Ashi candlesticks for the ask prices
+    df["ha_ask_open"], df["ha_ask_high"], df["ha_ask_low"], df["ha_ask_close"] = (
+        heiken_ashi_numpy(
+            df["ask_open"].to_numpy(),
+            df["ask_high"].to_numpy(),
+            df["ask_low"].to_numpy(),
+            df["ask_close"].to_numpy(),
+        )
+    )
+    df["wma_ha_ask_open"] = talib.WMA(
+        df["ha_ask_open"].to_numpy(), timeperiod=wma_period
+    )
+    df["wma_ha_ask_high"] = talib.WMA(
+        df["ha_ask_high"].to_numpy(), timeperiod=wma_period
+    )
+    df["wma_ha_ask_low"] = talib.WMA(df["ha_ask_low"].to_numpy(), timeperiod=wma_period)
+    df["wma_ha_ask_close"] = talib.WMA(
+        df["ha_ask_close"].to_numpy(), timeperiod=wma_period
+    )
+
+    return df
+
+
+def _solve_run(
+    kernel_conf_in: KernelConfig, config_tuple: tuple | None, df: pd.DataFrame
+) -> tuple[KernelConfig, pd.Series] | pd.Series | None:
+    # run the backtest
+    if config_tuple is not None:
+        kernel_conf = _map_kernel_conf(kernel_conf_in, config_tuple)
+    else:
+        kernel_conf = kernel_conf_in
+    wma = df[f"wma_{kernel_conf.source_column}"]
+    (
+        signal,
+        trigger,
+        position_value,
+        exit_value,
+        exit_total,
+        running_total,
+    ) = kernel_stage_1(
+        df[kernel_conf.signal_buy_column].to_numpy(),
+        df[kernel_conf.signal_exit_column].to_numpy(),
+        wma.to_numpy(),
+        df[kernel_conf.ask_column].to_numpy(),
+        df[kernel_conf.bid_column].to_numpy(),
+        df["atr"].to_numpy(),
+        kernel_conf.take_profit,
+        kernel_conf.stop_loss,
+        kernel_conf.signal_buy_column != kernel_conf.signal_exit_column,
+        kernel_conf.edge == EdgeCategory.Quasi,
+    )
+
+    # filter invalid results
+    if _is_invalid_scenario(exit_value, exit_total):
+        return None
+
+    # save results
+    df["signal"] = signal
+    df["trigger"] = trigger
+    df["position_value"] = position_value
+    df["exit_value"] = exit_value
+    df["exit_total"] = exit_total
+    df["running_total"] = running_total
+    df["wma"] = wma
+
+    rec = df.iloc[-1].copy(deep=True)
+    # recycle the dataframe to conserve on ram
+    _recycle_df(df)
+    return kernel_conf, rec
+
+
+def solve(
     chart_config: ChartConfig,
     kernel_conf_in: KernelConfig,
     token: str,
@@ -142,94 +288,203 @@ def backtest(  # noqa: C901, PLR0915
     """
     logger = logging.getLogger("backtest")
     logger.info("starting backtest")
-    git_info = get_git_info()
-    if git_info is None:
-        logger.error("Failed to get Git info")
+    commit, porcelain, err = get_git_info()
+    if err is not None:
+        logger.error("failed to get git info: %s", err)
         return None
-    logger.info("git info: %s %s", git_info[0], git_info[1])
+
+    logger.info("git info: %s %s", commit, porcelain)
     start_time = datetime.now()
-    orig_df, verifier_df_orig = _get_data(chart_config, token, backtest_config, logger)
+
+    # get data and preprocess
+    orig_df = preprocess(
+        _get_data(chart_config, token, logger), kernel_conf_in.wma_period
+    )
+
+    # get verifier data and preprocess
+    verifier_orig_df = preprocess(
+        _get_data(chart_config, token, logger, backtest_config.verifier),
+        kernel_conf_in.wma_period,
+    )
 
     best_result: tuple[BacktestResult, BacktestResult] | None = None
-
     column_pairs, column_pair_len = backtest_config.get_column_pairs()
     logger.info(f"total_combinations: {column_pair_len}")
     total_found = 0
     found_results: list[BacktestResult] = []
     best_total = 0.0
-    with PerfTimer(start_time, logger):
-        for config_tuple in alive_it(column_pairs, total=column_pair_len):
-            kernel_conf = _map_kernel_conf(kernel_conf_in, config_tuple)
-            df = kernel(
-                orig_df.copy(),
-                config=kernel_conf,
-            )
-            rec = df.iloc[-1]
+    count = 0
+    filter_start_time = datetime.now()
 
-            # if there are no wins, the total is worse, or the min total is worse then skip
-            if _is_invalid_rec(rec):
+    with PerfTimer(start_time, logger):
+        df = orig_df.copy()
+        for config_tuple in column_pairs:
+            # log progress
+            count = _log_progress(
+                logger, column_pair_len, total_found, count, filter_start_time
+            )
+
+            # run
+            result = _solve_run(kernel_conf_in, config_tuple, df)
+            if result is None:
                 continue
 
-            # if this configuration has already been found, skip
+            # save result if valid
+            total_found += 1
+            kernel_conf, rec = result
             found_results.append(
                 BacktestResult(
+                    instrument=chart_config.instrument,
                     kernel_conf=kernel_conf,
-                    best_df=df,
                     rec=rec,
                 )
             )
 
-            total_found += 1
-            _log_found(logger, df, rec)
-            total = rec.exit_total
-
-        found_filters = _generate_filters(
-            kernel_conf_in, backtest_config, found_results
+        count = 0
+        total_found = 0
+        df = verifier_orig_df.copy()
+        filter_start_time = datetime.now()
+        filter_count = (
+            len(found_results)
+            * len(backtest_config.take_profit)
+            * len(backtest_config.stop_loss)
         )
-        for found in alive_it(found_filters, total=len(found_filters)):
-            df = kernel(
-                verifier_df_orig.copy(),
-                config=found[1],
+        gen = (
+            (filter_result, tp, sl)
+            for filter_result in found_results
+            for tp in backtest_config.take_profit
+            for sl in backtest_config.stop_loss
+        )
+        for f in gen:
+            # log progress and filter invalid results
+            count = _log_progress(
+                logger, filter_count, total_found, count, filter_start_time
             )
-            rec = df.iloc[-1]
 
-            # if there are no wins, the total is worse, or the min total is worse then skip
-            if _is_invalid_rec(rec):
+            # run
+            filter_result, tp, sl = f
+            kernel_conf = KernelConfig(
+                filter_result.kernel_conf.signal_buy_column,
+                filter_result.kernel_conf.signal_exit_column,
+                filter_result.kernel_conf.source_column,
+                kernel_conf_in.wma_period,
+                tp,
+                sl,
+            )
+            result = _solve_run(kernel_conf, None, df)
+            if result is None:
                 continue
 
+            kernel_conf, rec = result
             total_found += 1
-            total = rec.exit_total + found[0].rec.exit_total
+            total = rec.exit_total + filter_result.rec.exit_total
             if total >= best_total:
-                _log_new_max(logger, df, rec, found, total)
                 best_result = (
-                    found[0],
+                    filter_result,
                     BacktestResult(
-                        kernel_conf=found[1],
-                        best_df=df,
+                        kernel_conf=kernel_conf,
                         rec=rec,
+                        instrument=backtest_config.verifier,
                     ),
                 )
                 best_total = total
-            else:
-                _log_found(logger, df, rec)
 
     logger.info("total_found: %s", total_found)
     if total_found == 0:
         logger.error("no combinations found")
         return None
 
-    if best_result is not None:
-        q_res, v_res = best_result
-        report(q_res.best_df, chart_config.instrument, q_res.kernel_conf, 5)
-        report(v_res.best_df, backtest_config.verifier, v_res.kernel_conf, 5)
-    else:
-        logger.error("no best found")
-        return None
-
     return best_result
 
 
-def _map_kernel_conf(kernel_conf_in, config_tuple):
+def _recycle_df(df):
+    df.drop(
+        columns=[
+            "signal",
+            "trigger",
+            "position_value",
+            "exit_value",
+            "exit_total",
+            "running_total",
+        ],
+        inplace=True,
+    )
+
+
+def _log_progress(
+    logger: logging.Logger,
+    column_pair_len: int,
+    total_found: int,
+    count: int,
+    start_time: datetime,
+) -> int:
+    if count == 0:
+        logger.info("starting pass")
+    count += 1
+    if count % 10000 == 0:
+        time_now = datetime.now()
+        time_diff = time_now - start_time
+        throughput = count / time_diff.total_seconds()
+        remaining = timedelta(seconds=(column_pair_len - count) / throughput)
+        logger.info(
+            "heartbeat: %s %s%% %s/%s %s/s %s remaining",
+            total_found,
+            round(100 * count / column_pair_len, 2),
+            count,
+            column_pair_len,
+            round(throughput, 2),
+            remaining,
+        )
+    return count
+
+
+def _get_data(
+    chart_config: ChartConfig,
+    token: str,
+    logger: logging.Logger,
+    instrument: str | None = None,
+) -> pd.DataFrame:
+    """Get data from Oanda and return it as a DataFrame.
+
+    Parameters
+    ----------
+    chart_config : ChartConfig
+        The configuration for the chart.
+    token : str
+        The Oanda API token.
+    logger : logging.Logger
+        The logger to use.
+    instrument : str | None, optional
+        The instrument to get data for. The default is None, which means to use the instrument from the chart config.
+
+    Returns
+    -------
+    pd.DataFrame
+        The DataFrame containing the data.
+
+    """
+    ctx = OandaContext(
+        v20.Context("api-fxpractice.oanda.com", token=token),
+        None,
+        token,
+        chart_config.instrument if instrument is None else instrument,
+    )
+
+    orig_df = getOandaOHLC(
+        ctx, count=chart_config.candle_count, granularity=chart_config.granularity
+    )
+    logger.info(
+        "count: %s granularity: %s",
+        chart_config.candle_count,
+        chart_config.granularity,
+    )
+
+    return orig_df
+
+
+def _map_kernel_conf(
+    kernel_conf_in: KernelConfig, config_tuple: tuple[str, str, str, float, float]
+) -> KernelConfig:
     kernel_conf = KernelConfig(
         wma_period=kernel_conf_in.wma_period,
         signal_buy_column=config_tuple[0],
@@ -242,91 +497,16 @@ def _map_kernel_conf(kernel_conf_in, config_tuple):
     return kernel_conf
 
 
-def _log_found(logger, df, rec):
-    logger.debug(
-        "found qt:%s qm:%s qe:%s w:%s l:%s",
-        rec.exit_total,
-        rec.min_exit_total,
-        df["exit_value"].min(),
-        rec.wins,
-        rec.losses,
-    )
-
-
-def _get_data(chart_config, token, backtest_config, logger):
-    ctx = OandaContext(
-        v20.Context("api-fxpractice.oanda.com", token=token),
-        None,
-        token,
-        chart_config.instrument,
-    )
-
-    orig_df = getOandaOHLC(
-        ctx, count=chart_config.candle_count, granularity=chart_config.granularity
-    )
-    logger.info(
-        "count: %s granularity: %s",
-        chart_config.candle_count,
-        chart_config.granularity,
-    )
-
-    verifier_ctx = OandaContext(
-        v20.Context("api-fxpractice.oanda.com", token=token),
-        None,
-        token,
-        backtest_config.verifier,
-    )
-    verifier_df_orig = getOandaOHLC(
-        verifier_ctx,
-        count=chart_config.candle_count,
-        granularity=chart_config.granularity,
-    )
-
-    return orig_df, verifier_df_orig
-
-
-def _log_new_max(logger, df, rec, found, total):
-    logger.debug(
-        "new vmax found t:%s qt:%s qm:%s qe:%s w:%s l:%s %s",
-        round(total, 5),
-        round(rec.exit_total, 5),
-        round(rec.min_exit_total, 5),
-        round(df["exit_value"].min(), 5),
-        rec.wins,
-        rec.losses,
-        found[1],
-    )
-
-
-def _generate_filters(
-    kernel_conf_in: KernelConfig,
-    backtest_config: BacktestConfig,
-    found_results: list[BacktestResult],
-) -> list[tuple[BacktestResult, KernelConfig]]:
-    found_filters: list[tuple[BacktestResult, KernelConfig]] = []
-    for filter_result in found_results:
-        for tp in backtest_config.take_profit:
-            for sl in backtest_config.stop_loss:
-                found_filters.append(
-                    (
-                        filter_result,
-                        KernelConfig(
-                            filter_result.kernel_conf.signal_buy_column,
-                            filter_result.kernel_conf.signal_exit_column,
-                            filter_result.kernel_conf.source_column,
-                            kernel_conf_in.wma_period,
-                            tp,
-                            sl,
-                        ),
-                    )
-                )
-
-    return found_filters
-
-
-def _is_invalid_rec(rec):
+@jit(nopython=True)
+def _is_invalid_scenario(
+    exit_value: NDArray[np.float64], exit_total: NDArray[np.float64]
+) -> np.bool:
+    wins: np.float64 = np.where(exit_value > 0, 1, 0).astype(np.int64).sum()
+    final_exit_total: np.float64 = exit_total[-1]
     return (
-        rec.wins == 0
-        or rec.exit_total < 0
-        or (rec.min_exit_total < 0 and abs(rec.min_exit_total) > abs(rec.exit_total))
+        wins == 0
+        or final_exit_total < 0
+        or (
+            exit_value.min() < 0 and np.abs(exit_value.min()) > np.abs(final_exit_total)
+        )
     )

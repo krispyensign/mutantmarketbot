@@ -3,13 +3,10 @@
 from dataclasses import dataclass
 from functools import cached_property
 from typing import Any
-import talib
 import pandas as pd
 
-from core.chart import heiken_ashi_numpy
 from core.calc import (
     entry_price,
-    exit_total,
     take_profit,
     stop_loss as sl,
 )
@@ -51,20 +48,8 @@ class KernelConfig:
             The edge of the kernel.
 
         """
-        if (
-            "open" in self.source_column
-            and "open" in self.signal_buy_column
-            and "open" in self.signal_exit_column
-        ):
-            return EdgeCategory.Latest
-        elif (
-            "open" in self.source_column
-            and "open" not in self.signal_buy_column
-            and "open" in self.signal_exit_column
-        ):
+        if "open" in self.source_column and "open" in self.signal_exit_column:
             return EdgeCategory.Quasi
-        # elif "open" in self.source_column and "low" in self.signal_exit_column:
-        #     return EdgeCategory.Fast
         else:
             return EdgeCategory.Deterministic
 
@@ -78,11 +63,6 @@ class KernelConfig:
             The name of the column in the DataFrame for the ask prices.
 
         """
-        if self.edge == EdgeCategory.Latest:
-            return "ask_open"
-        # elif self.edge == EdgeCategory.Fast:
-        #     return ""
-
         return "ask_close"
 
     @cached_property
@@ -97,8 +77,6 @@ class KernelConfig:
         """
         if self.edge == EdgeCategory.Deterministic:
             return "bid_close"
-        # elif self.edge == EdgeCategory.Fast:
-        #     return "bid_low"
         else:
             return "bid_open"
 
@@ -118,6 +96,7 @@ def wma_exit_signals(
     buy_signals = np.where(buy_data > wma_data, np.True_, np.False_)
     exit_signals = np.where(exit_data > wma_data, np.True_, np.False_)
     for i in range(1, len(buy_signals)):
+        # apply wma
         An1 = buy_signals[i - 1]
         An = buy_signals[i]
         B = exit_signals[i]
@@ -143,7 +122,7 @@ def wma_signals_no_exit(
 
 
 @jit(nopython=True)
-def kernel_stage_1(  # noqa: PLR0913
+def kernel_stage_1(
     buy_data: NDArray[Any],
     exit_data: NDArray[Any],
     wma_data: NDArray[Any],
@@ -187,8 +166,8 @@ def kernel_stage_1(  # noqa: PLR0913
 
     Returns
     -------
-    tuple[NDArray[Any], NDArray[Any], NDArray[Any]]
-        A tuple containing the signal, trigger, and position value arrays.
+    tuple[NDArray[Any], NDArray[Any], NDArray[Any], NDArray[Any], NDArray[Any], NDArray[Any]]
+        A tuple containing the signal, trigger, position, exit value, exit total, and running total arrays.
 
     """
     # signal using the close prices
@@ -248,7 +227,11 @@ def kernel_stage_1(  # noqa: PLR0913
             if signal[i - 2] == 0 and signal[i - 1] == 1 and signal[i - 0] == 0:
                 signal[i - 1] = 0
 
-    return signal, trigger, position_value
+    exit_value = np.where(trigger == -1, position_value, 0)
+    et = np.cumsum(exit_value)
+    running_total = et + position_value * signal
+
+    return signal, trigger, position_value, exit_value, et, running_total
 
 
 def kernel(
@@ -275,50 +258,15 @@ def kernel(
         A DataFrame containing the processed trading data.
 
     """
-    if (
-        "ha" in config.signal_buy_column
-        or "ha" in config.signal_exit_column
-        or "ha" in config.source_column
-    ):
-        # calculate the Heikin-Ashi candlesticks
-        df["ha_open"], df["ha_high"], df["ha_low"], df["ha_close"] = heiken_ashi_numpy(
-            df["open"].to_numpy(),
-            df["high"].to_numpy(),
-            df["low"].to_numpy(),
-            df["close"].to_numpy(),
-        )
-
-        # calculate the Heikin-Ashi candlesticks for the bid prices
-        df["ha_bid_open"], df["ha_bid_high"], df["ha_bid_low"], df["ha_bid_close"] = (
-            heiken_ashi_numpy(
-                df["bid_open"].to_numpy(),
-                df["bid_high"].to_numpy(),
-                df["bid_low"].to_numpy(),
-                df["bid_close"].to_numpy(),
-            )
-        )
-
-        # calculate the Heikin-Ashi candlesticks for the ask prices
-        df["ha_ask_open"], df["ha_ask_high"], df["ha_ask_low"], df["ha_ask_close"] = (
-            heiken_ashi_numpy(
-                df["ask_open"].to_numpy(),
-                df["ask_high"].to_numpy(),
-                df["ask_low"].to_numpy(),
-                df["ask_close"].to_numpy(),
-            )
-        )
-
-    # calculate the ATR for the trailing stop loss
-    df["atr"] = talib.ATR(
-        df["high"].to_numpy(),
-        df["low"].to_numpy(),
-        df["close"].to_numpy(),
-        timeperiod=config.wma_period,
-    )
-    df["wma"] = talib.WMA(df[config.source_column].to_numpy(), config.wma_period)
-
     # calculate the entry and exit signals
-    df["signal"], df["trigger"], df["position_value"] = kernel_stage_1(
+    (
+        df["signal"],
+        df["trigger"],
+        df["position_value"],
+        df["exit_value"],
+        df["exit_total"],
+        df["running_total"],
+    ) = kernel_stage_1(
         df[config.signal_buy_column].to_numpy(),
         df[config.signal_exit_column].to_numpy(),
         df["wma"].to_numpy(),
@@ -330,8 +278,5 @@ def kernel(
         config.signal_buy_column != config.signal_exit_column,
         config.edge == EdgeCategory.Quasi,
     )
-
-    # calculate the exit total
-    exit_total(df)
 
     return df

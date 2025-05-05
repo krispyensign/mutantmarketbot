@@ -26,56 +26,6 @@ def heiken_ashi_numpy(
     return ha_open, ha_high, ha_low, ha_close
 
 
-def heikin_ashi(df: pd.DataFrame) -> None:
-    """Generate Heikin Ashi candlesticks for a given dataframe.
-
-    Heikin Ashi is a Japanese chart type that is used to identify trends and
-    patterns in financial markets. It is similar to traditional candlestick charts,
-    but it uses the average of the high, low, and closing prices to calculate
-    the body of the candle.  This function also generates Heikin Ashi candlesticks
-    for the bid and ask prices.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        A DataFrame containing OHLC data.
-
-    Returns
-    -------
-    pd.DataFrame
-        A DataFrame containing Heikin Ashi candlesticks.  The candlesticks are
-        added as new columns to the original DataFrame.  They are named
-        'ha_close', 'ha_open', 'ha_high', and 'ha_low'. The 'ha_bid_close',
-        'ha_ask_close', 'ha_bid_open', 'ha_ask_open', 'ha_bid_high', 'ha_ask_high',
-        'ha_bid_low', and 'ha_ask_low' are also added.
-
-    """
-    df["ha_open"], df["ha_high"], df["ha_low"], df["ha_close"] = heiken_ashi_numpy(
-        df["open"].to_numpy(),
-        df["high"].to_numpy(),
-        df["low"].to_numpy(),
-        df["close"].to_numpy(),
-    )
-
-    df["ha_bid_open"], df["ha_bid_high"], df["ha_bid_low"], df["ha_bid_close"] = (
-        heiken_ashi_numpy(
-            df["bid_open"].to_numpy(),
-            df["bid_high"].to_numpy(),
-            df["bid_low"].to_numpy(),
-            df["bid_close"].to_numpy(),
-        )
-    )
-
-    df["ha_ask_open"], df["ha_ask_high"], df["ha_ask_low"], df["ha_ask_close"] = (
-        heiken_ashi_numpy(
-            df["ask_open"].to_numpy(),
-            df["ask_high"].to_numpy(),
-            df["ask_low"].to_numpy(),
-            df["ask_close"].to_numpy(),
-        )
-    )
-
-
 def ohlc(
     df: pd.DataFrame, timeFrame: str = "5Min", isSwapped: bool = False
 ) -> tuple[pd.DataFrame, typing.Any]:
