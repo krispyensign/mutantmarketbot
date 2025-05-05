@@ -97,7 +97,6 @@ def wma_exit_signals(
     buy_signals = np.where(buy_data > wma_data, np.True_, np.False_)
     exit_signals = np.where(exit_data > wma_data, np.True_, np.False_)
     for i in range(1, len(buy_signals)):
-
         # apply wma
         An1 = buy_signals[i - 1]
         An = buy_signals[i]

@@ -22,7 +22,7 @@ from bot.reporting import report
 APP_START_TIME = datetime.now()
 
 
-def get_git_info() -> tuple[str, bool] | None:
+def get_git_info() -> tuple[str, bool, Exception | None]:
     """Get commit hash and whether the working tree is clean.
 
     Returns a tuple (str, bool). The first element is the commit hash. The second
@@ -31,7 +31,6 @@ def get_git_info() -> tuple[str, bool] | None:
 
     If there is an error (e.g., not in a Git repository), the function returns None.
     """
-    logger = logging.getLogger("backtest")
     try:
         # Get commit hash
         commit_hash = subprocess.check_output(
@@ -43,11 +42,9 @@ def get_git_info() -> tuple[str, bool] | None:
             ["git", "status", "--porcelain"], encoding="utf-8"
         ).strip()
 
-        return commit_hash, porcelain_status == ""
+        return commit_hash, porcelain_status == "", None
     except subprocess.CalledProcessError as e:
-        logger.error("Failed to get Git info: %s", e)
-        # Handle errors, e.g., when not in a Git repository
-        return None
+        return "", False, e
 
 
 class PerfTimer:
@@ -110,6 +107,45 @@ class BacktestResult:
     rec: pd.Series
 
 
+def _preprocess(df: pd.DataFrame, wma_period: int) -> pd.DataFrame:
+    # calculate the ATR for the trailing stop loss
+    df["atr"] = talib.ATR(
+        df["high"].to_numpy(),
+        df["low"].to_numpy(),
+        df["close"].to_numpy(),
+        timeperiod=wma_period,
+    )
+    # calculate the Heikin-Ashi candlesticks
+    df["ha_open"], df["ha_high"], df["ha_low"], df["ha_close"] = heiken_ashi_numpy(
+        df["open"].to_numpy(),
+        df["high"].to_numpy(),
+        df["low"].to_numpy(),
+        df["close"].to_numpy(),
+    )
+
+    # calculate the Heikin-Ashi candlesticks for the bid prices
+    df["ha_bid_open"], df["ha_bid_high"], df["ha_bid_low"], df["ha_bid_close"] = (
+        heiken_ashi_numpy(
+            df["bid_open"].to_numpy(),
+            df["bid_high"].to_numpy(),
+            df["bid_low"].to_numpy(),
+            df["bid_close"].to_numpy(),
+        )
+    )
+
+    # calculate the Heikin-Ashi candlesticks for the ask prices
+    df["ha_ask_open"], df["ha_ask_high"], df["ha_ask_low"], df["ha_ask_close"] = (
+        heiken_ashi_numpy(
+            df["ask_open"].to_numpy(),
+            df["ask_high"].to_numpy(),
+            df["ask_low"].to_numpy(),
+            df["ask_close"].to_numpy(),
+        )
+    )
+
+    return df
+
+
 def backtest(  # noqa: C901, PLR0915
     chart_config: ChartConfig,
     kernel_conf_in: KernelConfig,
@@ -143,80 +179,23 @@ def backtest(  # noqa: C901, PLR0915
     """
     logger = logging.getLogger("backtest")
     logger.info("starting backtest")
-    git_info = get_git_info()
-    if git_info is None:
-        logger.error("Failed to get Git info")
+    commit, porcelain, err = get_git_info()
+    if err is not None:
+        logger.error("failed to get git info: %s", err)
         return None
-    logger.info("git info: %s %s", git_info[0], git_info[1])
+
+    logger.info("git info: %s %s", commit, porcelain)
     start_time = datetime.now()
-    orig_df, verifier_df_orig = _get_data(chart_config, token, backtest_config, logger)
-    # calculate the ATR for the trailing stop loss
-    orig_df["atr"] = talib.ATR(
-        orig_df["high"].to_numpy(),
-        orig_df["low"].to_numpy(),
-        orig_df["close"].to_numpy(),
-        timeperiod=kernel_conf_in.wma_period,
-    )
-    verifier_df_orig["atr"] = talib.ATR(
-        verifier_df_orig["high"].to_numpy(),
-        verifier_df_orig["low"].to_numpy(),
-        verifier_df_orig["close"].to_numpy(),
-        timeperiod=kernel_conf_in.wma_period,
-    )
-    # calculate the Heikin-Ashi candlesticks
-    orig_df["ha_open"], orig_df["ha_high"], orig_df["ha_low"], orig_df["ha_close"] = heiken_ashi_numpy(
-        orig_df["open"].to_numpy(),
-        orig_df["high"].to_numpy(),
-        orig_df["low"].to_numpy(),
-        orig_df["close"].to_numpy(),
+
+    # get data and preprocess
+    orig_df = _preprocess(
+        _get_data(chart_config, token, logger), kernel_conf_in.wma_period
     )
 
-    # calculate the Heikin-Ashi candlesticks for the bid prices
-    orig_df["ha_bid_open"], orig_df["ha_bid_high"], orig_df["ha_bid_low"], orig_df["ha_bid_close"] = (
-        heiken_ashi_numpy(
-            orig_df["bid_open"].to_numpy(),
-            orig_df["bid_high"].to_numpy(),
-            orig_df["bid_low"].to_numpy(),
-            orig_df["bid_close"].to_numpy(),
-        )
-    )
-
-    # calculate the Heikin-Ashi candlesticks for the ask prices
-    orig_df["ha_ask_open"], orig_df["ha_ask_high"], orig_df["ha_ask_low"], orig_df["ha_ask_close"] = (
-        heiken_ashi_numpy(
-            orig_df["ask_open"].to_numpy(),
-            orig_df["ask_high"].to_numpy(),
-            orig_df["ask_low"].to_numpy(),
-            orig_df["ask_close"].to_numpy(),
-        )
-    )
-
-    # calculate the Heikin-Ashi candlesticks
-    verifier_df_orig["ha_open"], verifier_df_orig["ha_high"], verifier_df_orig["ha_low"], verifier_df_orig["ha_close"] = heiken_ashi_numpy(
-        verifier_df_orig["open"].to_numpy(),
-        verifier_df_orig["high"].to_numpy(),
-        verifier_df_orig["low"].to_numpy(),
-        verifier_df_orig["close"].to_numpy(),
-    )
-
-    # calculate the Heikin-Ashi candlesticks for the bid prices
-    verifier_df_orig["ha_bid_open"], verifier_df_orig["ha_bid_high"], verifier_df_orig["ha_bid_low"], verifier_df_orig["ha_bid_close"] = (
-        heiken_ashi_numpy(
-            verifier_df_orig["bid_open"].to_numpy(),
-            verifier_df_orig["bid_high"].to_numpy(),
-            verifier_df_orig["bid_low"].to_numpy(),
-            verifier_df_orig["bid_close"].to_numpy(),
-        )
-    )
-
-    # calculate the Heikin-Ashi candlesticks for the ask prices
-    verifier_df_orig["ha_ask_open"], verifier_df_orig["ha_ask_high"], verifier_df_orig["ha_ask_low"], verifier_df_orig["ha_ask_close"] = (
-        heiken_ashi_numpy(
-            verifier_df_orig["ask_open"].to_numpy(),
-            verifier_df_orig["ask_high"].to_numpy(),
-            verifier_df_orig["ask_low"].to_numpy(),
-            verifier_df_orig["ask_close"].to_numpy(),
-        )
+    # get verifier data and preprocess
+    verifier_orig_df = _preprocess(
+        _get_data(chart_config, token, logger, backtest_config.verifier),
+        kernel_conf_in.wma_period,
     )
 
     best_result: tuple[BacktestResult, BacktestResult] | None = None
@@ -226,11 +205,13 @@ def backtest(  # noqa: C901, PLR0915
     found_results: list[BacktestResult] = []
     best_total = 0.0
     count = 0
+
     with PerfTimer(start_time, logger):
         for config_tuple in column_pairs:
-
             kernel_conf = _map_kernel_conf(kernel_conf_in, config_tuple)
-            wma = talib.WMA(orig_df[kernel_conf.source_column].to_numpy(), kernel_conf.wma_period)
+            wma = talib.WMA(
+                orig_df[kernel_conf.source_column].to_numpy(), kernel_conf.wma_period
+            )
             df = orig_df.copy()
             df["wma"] = wma
             df = kernel(
@@ -242,7 +223,12 @@ def backtest(  # noqa: C901, PLR0915
                 logger.info("starting pass 1")
             count += 1
             if count % 100 == 0:
-                logger.info("heartbeat (pass 1): %s %s / %s",total_found, count, column_pair_len)
+                logger.info(
+                    "heartbeat (pass 1): %s %s / %s",
+                    total_found,
+                    count,
+                    column_pair_len,
+                )
 
             # if there are no wins, the total is worse, or the min total is worse then skip
             if _is_invalid_rec(rec):
@@ -266,9 +252,12 @@ def backtest(  # noqa: C901, PLR0915
         )
         count = 0
         for found in found_filters:
-            wma = talib.WMA(verifier_df_orig[kernel_conf.source_column].to_numpy(), kernel_conf.wma_period)
-            df = verifier_df_orig.copy()
-            df["wma" ] = wma
+            wma = talib.WMA(
+                verifier_orig_df[kernel_conf.source_column].to_numpy(),
+                kernel_conf.wma_period,
+            )
+            df = verifier_orig_df.copy()
+            df["wma"] = wma
             df = kernel(
                 df,
                 config=found[1],
@@ -296,7 +285,12 @@ def backtest(  # noqa: C901, PLR0915
                 _log_found(logger, df, rec)
             count += 1
             if count % 100 == 0:
-                logger.info("heartbeat (pass 2): %s %s / %s",total_found, count, len(found_filters))
+                logger.info(
+                    "heartbeat (pass 2): %s %s / %s",
+                    total_found,
+                    count,
+                    len(found_filters),
+                )
 
     logger.info("total_found: %s", total_found)
     if total_found == 0:
@@ -312,6 +306,26 @@ def backtest(  # noqa: C901, PLR0915
         return None
 
     return best_result
+
+
+def _get_data(chart_config, token, logger, instrument: str | None = None):
+    ctx = OandaContext(
+        v20.Context("api-fxpractice.oanda.com", token=token),
+        None,
+        token,
+        chart_config.instrument if instrument is None else instrument,
+    )
+
+    orig_df = getOandaOHLC(
+        ctx, count=chart_config.candle_count, granularity=chart_config.granularity
+    )
+    logger.info(
+        "count: %s granularity: %s",
+        chart_config.candle_count,
+        chart_config.granularity,
+    )
+
+    return orig_df
 
 
 def _map_kernel_conf(kernel_conf_in, config_tuple):
@@ -336,38 +350,6 @@ def _log_found(logger, df, rec):
         rec.wins,
         rec.losses,
     )
-
-
-def _get_data(chart_config, token, backtest_config, logger):
-    ctx = OandaContext(
-        v20.Context("api-fxpractice.oanda.com", token=token),
-        None,
-        token,
-        chart_config.instrument,
-    )
-
-    orig_df = getOandaOHLC(
-        ctx, count=chart_config.candle_count, granularity=chart_config.granularity
-    )
-    logger.info(
-        "count: %s granularity: %s",
-        chart_config.candle_count,
-        chart_config.granularity,
-    )
-
-    verifier_ctx = OandaContext(
-        v20.Context("api-fxpractice.oanda.com", token=token),
-        None,
-        token,
-        backtest_config.verifier,
-    )
-    verifier_df_orig = getOandaOHLC(
-        verifier_ctx,
-        count=chart_config.candle_count,
-        granularity=chart_config.granularity,
-    )
-
-    return orig_df, verifier_df_orig
 
 
 def _log_new_max(logger, df, rec, found, total):
