@@ -206,7 +206,7 @@ def preprocess(df: pd.DataFrame, wma_period: int) -> pd.DataFrame:
     return df
 
 
-def solve(  # noqa: C901, PLR0915
+def solve(
     chart_config: ChartConfig,
     kernel_conf_in: KernelConfig,
     token: str,

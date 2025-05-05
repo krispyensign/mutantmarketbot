@@ -6,7 +6,7 @@ import sys
 
 import yaml
 
-from bot.solve import BacktestConfig, ChartConfig, solve
+from bot.backtest import BacktestConfig, ChartConfig, solve
 from bot.bot import TradeConfig, bot
 from core.kernel import KernelConfig
 import os
