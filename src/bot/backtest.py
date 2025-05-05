@@ -349,10 +349,9 @@ def _log_progress(
     count += 1
     if count % 1000 == 0:
         logger.info(
-            "heartbeat (pass 1): %s %s / %s",
+            "heartbeat (pass 1): %s %s%%",
             total_found,
-            count,
-            column_pair_len,
+            round(100 * count / column_pair_len, 2),
         )
     return count
 
