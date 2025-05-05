@@ -29,9 +29,6 @@ def exit_total(df: pd.DataFrame) -> None:
     df["exit_value"] = df["position_value"] * ((df["trigger"] == -1).astype(int))
     df["exit_total"] = df["exit_value"].cumsum()
     df["running_total"] = df["exit_total"] + (df["position_value"] * df["signal"])
-    df["wins"] = (df["exit_value"] > 0).astype(int).cumsum()
-    df["losses"] = (df["exit_value"] < 0).astype(int).cumsum()
-    df["min_exit_total"] = df["exit_total"].expanding().min()
 
 
 @jit(nopython=True)

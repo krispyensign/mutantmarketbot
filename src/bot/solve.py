@@ -256,8 +256,8 @@ def solve(  # noqa: C901, PLR0915
             rec = df.iloc[-1]
 
             # log progress and filter invalid results
-            count = _log_progress(logger, column_pair_len, total_found, count)
-            if _is_invalid_rec(rec):
+            count = _log_progress(logger, column_pair_len, total_found, count, APP_START_TIME)
+            if _is_invalid_rec(rec, df):
                 continue
 
             # if this configuration has already been found, skip
@@ -271,7 +271,7 @@ def solve(  # noqa: C901, PLR0915
 
             total_found += 1
             total = rec.exit_total
-            _log_found(logger, df, rec)
+            _log_found(logger, df, rec, kernel_conf)
             _recycle_df(df)
 
         found_filters = _generate_filters(
@@ -279,6 +279,7 @@ def solve(  # noqa: C901, PLR0915
         )
         count = 0
         df = verifier_orig_df.copy()
+        filter_start_time = datetime.now()
         for found in found_filters:
             # run the backtest
             df["wma"] = verifier_orig_df[f"wma_{found[1].source_column}"]
@@ -286,8 +287,8 @@ def solve(  # noqa: C901, PLR0915
             rec = df.iloc[-1]
 
             # log progress and filter invalid results
-            count = _log_progress(logger, column_pair_len, total_found, count)
-            if _is_invalid_rec(rec):
+            count = _log_progress(logger, column_pair_len, total_found, count, filter_start_time)
+            if _is_invalid_rec(rec, df):
                 continue
 
             total_found += 1
@@ -304,7 +305,7 @@ def solve(  # noqa: C901, PLR0915
                 )
                 best_total = total
             else:
-                _log_found(logger, df, rec)
+                _log_found(logger, df, rec, found[1])
 
             _recycle_df(df)
 
@@ -333,25 +334,30 @@ def _recycle_df(df):
             "exit_value",
             "exit_total",
             "running_total",
-            "wins",
-            "losses",
-            "min_exit_total",
         ],
         inplace=True,
     )
 
 
 def _log_progress(
-    logger: logging.Logger, column_pair_len: int, total_found: int, count: int
+    logger: logging.Logger, column_pair_len: int, total_found: int, count: int, start_time: datetime
 ) -> int:
     if count == 0:
-        logger.info("starting pass 1")
+        logger.info("starting pass")
     count += 1
     if count % 1000 == 0:
+        time_now = datetime.now()
+        time_diff = time_now - start_time
+        throughput = count / time_diff.total_seconds()
+        time_left = time_diff * (column_pair_len - total_found) / count
         logger.info(
-            "heartbeat (pass 1): %s %s%%",
+            "heartbeat: %s %s%% %s/%s %s/s %s left",
             total_found,
             round(100 * count / column_pair_len, 2),
+            count,
+            column_pair_len,
+            round(throughput, 2),
+            time_left,
         )
     return count
 
@@ -396,14 +402,17 @@ def _map_kernel_conf(
     return kernel_conf
 
 
-def _log_found(logger: logging.Logger, df: pd.DataFrame, rec: pd.Series):
+def _log_found(logger: logging.Logger, df: pd.DataFrame, rec: pd.Series, kernel_conf: KernelConfig):
+    wins = (df["exit_value"] > 0).astype(int).cumsum()
+    losses = (df["exit_value"] < 0).astype(int).cumsum()
     logger.debug(
-        "found qt:%s qm:%s qe:%s w:%s l:%s",
-        rec.exit_total,
-        rec.min_exit_total,
-        df["exit_value"].min(),
-        rec.wins,
-        rec.losses,
+        "found qt:%s qm:%s qe:%s w:%s l:%s %s",
+        round(rec.exit_total, 5),
+        round(df["exit_total"].min(), 5),
+        round(df["exit_value"].min(), 5),
+        wins.iloc[-1],
+        losses.iloc[-1],
+        kernel_conf,
     )
 
 
@@ -414,14 +423,16 @@ def _log_new_max(
     found: tuple[BacktestResult, KernelConfig],
     total: float,
 ):
+    wins = (df["exit_value"] > 0).astype(int).cumsum()
+    losses = (df["exit_value"] < 0).astype(int).cumsum()
     logger.debug(
         "new vmax found t:%s qt:%s qm:%s qe:%s w:%s l:%s %s",
         round(total, 5),
         round(rec.exit_total, 5),
-        round(rec.min_exit_total, 5),
+        round(df["exit_total"].min(), 5),
         round(df["exit_value"].min(), 5),
-        rec.wins,
-        rec.losses,
+        wins.iloc[-1],
+        losses.iloc[-1],
         found[1],
     )
 
@@ -452,9 +463,10 @@ def _generate_filters(
     return found_filters
 
 
-def _is_invalid_rec(rec):
+def _is_invalid_rec(rec, df):
+    wins = (df["exit_value"] > 0).astype(int).cumsum()
     return (
-        rec.wins == 0
+        wins.iloc[-1] == 0
         or rec.exit_total < 0
-        or (rec.min_exit_total < 0 and abs(rec.min_exit_total) > abs(rec.exit_total))
+        or (df["exit_total"].min() < 0 and abs(df["exit_total"].min()) > abs(rec.exit_total))
     )

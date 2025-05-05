@@ -8,7 +8,7 @@ import uuid
 import v20  # type: ignore
 import pandas as pd
 
-from bot.backtest import ChartConfig, PerfTimer, get_git_info
+from bot.solve import ChartConfig, PerfTimer, get_git_info
 from core.kernel import EdgeCategory, KernelConfig, kernel
 from bot.reporting import report
 from bot.exchange import (
@@ -177,11 +177,12 @@ def bot(  # noqa: PLR0913
             continue
 
         if df is not None:
-            rec = round(df.iloc[-1], 5)
             min_exit_value = round(df["exit_value"].min(), 5)
             max_exit_value = round(df["exit_value"].max(), 5)
+            wins = (df["exit_value"] > 0).astype(int).cumsum()
+            losses = (df["exit_value"] < 0).astype(int).cumsum()
             logger.info(
-                f"w: {rec.wins} l: {rec.losses} min: {min_exit_value} max: {max_exit_value}"
+                f"w: {wins.iloc[-1]} l: {losses.iloc[-1]} min: {min_exit_value} max: {max_exit_value}"
             )
 
         logger.info(f"git commit: {git_info[0]}, porcelain: {git_info[1]}")
