@@ -122,7 +122,7 @@ def wma_signals_no_exit(
 
 
 @jit(nopython=True)
-def kernel_stage_1(  # noqa: PLR0913
+def kernel_stage_1(
     buy_data: NDArray[Any],
     exit_data: NDArray[Any],
     wma_data: NDArray[Any],

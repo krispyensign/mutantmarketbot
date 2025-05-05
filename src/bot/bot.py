@@ -8,7 +8,7 @@ import uuid
 import v20  # type: ignore
 import pandas as pd
 
-from bot.solve import ChartConfig, PerfTimer, get_git_info, preprocess
+from bot.backtest import ChartConfig, PerfTimer, get_git_info, preprocess
 from core.kernel import EdgeCategory, KernelConfig, kernel
 from bot.reporting import report
 from bot.exchange import (
@@ -34,7 +34,7 @@ class TradeConfig:
     bot_id: uuid.UUID
 
 
-def bot_run(  # noqa: PLR0911
+def bot_run(
     ctx: OandaContext,
     kernel_conf: KernelConfig,
     chart_conf: ChartConfig,
@@ -113,7 +113,7 @@ def get_rec(kernel_conf, trade_id, df):
     return rec
 
 
-def bot(  # noqa: PLR0913
+def bot(
     token: str,
     account_id: str,
     chart_conf: ChartConfig,
@@ -202,7 +202,7 @@ def bot(  # noqa: PLR0913
         sleep_until_next_5_minute(trade_id=trade_id)
 
 
-def log_event(  # noqa: PLR0913
+def log_event(
     chart_conf: ChartConfig,
     kernel_conf: KernelConfig,
     trade_conf: TradeConfig,
