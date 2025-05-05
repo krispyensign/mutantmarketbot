@@ -57,7 +57,8 @@ if __name__ == "__main__":
         pr.enable()
         try:
             result = solve(chart_conf, kernel_conf, TOKEN, backtest_conf)
-        except KeyboardInterrupt:
+        except Exception as err:
+            logger.error(err)
             pr.disable()
             s = io.StringIO()
             sortby = SortKey.CUMULATIVE
@@ -67,8 +68,8 @@ if __name__ == "__main__":
         if result is None:
             sys.exit(1)
 
-        logger.info(result[0].kernel_conf)
-        logger.info(result[1].kernel_conf)
+        logger.info("ins: %s %s", chart_conf.instrument, result[0].kernel_conf)
+        logger.info("ins: %s %s", backtest_conf.verifier, result[1].kernel_conf)
 
     elif sys.argv[1] in ["bot", "observe"]:
         # load config

@@ -1,23 +1,24 @@
 """Backtest the trading strategy."""
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 import itertools
 import subprocess
+import numpy as np
 import pandas as pd
 import talib
 import v20  # type: ignore
 from core.chart import heiken_ashi_numpy
+from numpy.typing import NDArray
+from numba import jit  # type: ignore
 
-from core.kernel import KernelConfig, kernel
+from core.kernel import EdgeCategory, KernelConfig, kernel, kernel_stage_1
 from bot.exchange import (
     getOandaOHLC,
     OandaContext,
 )
 
 import logging
-
-from bot.reporting import report
 
 APP_START_TIME = datetime.now()
 
@@ -103,7 +104,6 @@ class BacktestResult:
     """BacktestResult class."""
 
     kernel_conf: KernelConfig
-    best_df: pd.DataFrame
     rec: pd.Series
 
 
@@ -205,6 +205,51 @@ def preprocess(df: pd.DataFrame, wma_period: int) -> pd.DataFrame:
 
     return df
 
+def _solve_run(kernel_conf_in: KernelConfig, config_tuple: tuple | None, df: pd.DataFrame) -> tuple[KernelConfig, pd.Series] | pd.Series | None:
+    # run the backtest
+    if config_tuple is not None:
+        kernel_conf = _map_kernel_conf(kernel_conf_in, config_tuple)
+    else:
+        kernel_conf = kernel_conf_in
+    wma = df[f"wma_{kernel_conf.source_column}"]
+    (
+        signal,
+        trigger,
+        position_value,
+        exit_value,
+        exit_total,
+        running_total,
+    ) = kernel_stage_1(
+        df[kernel_conf.signal_buy_column].to_numpy(),
+        df[kernel_conf.signal_exit_column].to_numpy(),
+        wma.to_numpy(),
+        df[kernel_conf.ask_column].to_numpy(),
+        df[kernel_conf.bid_column].to_numpy(),
+        df["atr"].to_numpy(),
+        kernel_conf.take_profit,
+        kernel_conf.stop_loss,
+        kernel_conf.signal_buy_column != kernel_conf.signal_exit_column,
+        kernel_conf.edge == EdgeCategory.Quasi,
+    )
+
+    # filter invalid results
+    if _is_invalid_scenario(exit_value, exit_total):
+        return None
+
+    # save results
+    df["signal"] = signal
+    df["trigger"] = trigger
+    df["position_value"] = position_value
+    df["exit_value"] = exit_value
+    df["exit_total"] = exit_total
+    df["running_total"] = running_total
+    df["wma"] = wma
+    
+    rec = df.iloc[-1].copy(deep=True)
+    # recycle the dataframe to conserve on ram
+    _recycle_df(df)
+    return kernel_conf, rec
+
 
 def solve(
     chart_config: ChartConfig,
@@ -269,81 +314,70 @@ def solve(
     with PerfTimer(start_time, logger):
         df = orig_df.copy()
         for config_tuple in column_pairs:
-            # run the backtest
-            kernel_conf = _map_kernel_conf(kernel_conf_in, config_tuple)
-            df["wma"] = df[f"wma_{kernel_conf.source_column}"]
-            df = kernel(df, config=kernel_conf)
-            rec = df.iloc[-1]
-
-            # log progress and filter invalid results
+            # log progress
             count = _log_progress(
                 logger, column_pair_len, total_found, count, APP_START_TIME
             )
-            if _is_invalid_rec(rec, df):
+
+            # run
+            result = _solve_run(kernel_conf_in, config_tuple, df)
+            if result is None:
                 continue
 
-            # if this configuration has already been found, skip
+            # save result if valid
+            total_found += 1
+            kernel_conf, rec = result
             found_results.append(
                 BacktestResult(
                     kernel_conf=kernel_conf,
-                    best_df=df.copy(),
-                    rec=rec.copy(),
+                    rec=rec,
                 )
             )
-
-            total_found += 1
-            total = rec.exit_total
-            # _log_found(logger, df, rec, kernel_conf)
-            _recycle_df(df)
 
         found_filters = _generate_filters(
             kernel_conf_in, backtest_config, found_results
         )
         count = 0
+        total_found = 0
         df = verifier_orig_df.copy()
         filter_start_time = datetime.now()
-        for found in found_filters:
-            # run the backtest
-            df["wma"] = verifier_orig_df[f"wma_{found[1].source_column}"]
-            df = kernel(df, config=found[1])
-            rec = df.iloc[-1]
-
+        gen = ((filter_result, tp, sl) for filter_result in found_results for tp in backtest_config.take_profit for sl in backtest_config.stop_loss)
+        for f in gen:
             # log progress and filter invalid results
             count = _log_progress(
                 logger, len(found_filters), total_found, count, filter_start_time
             )
-            if _is_invalid_rec(rec, df):
+
+            # run
+            filter_result, tp, sl = f
+            kernel_conf = KernelConfig(
+                filter_result.kernel_conf.signal_buy_column,
+                filter_result.kernel_conf.signal_exit_column,
+                filter_result.kernel_conf.source_column,
+                kernel_conf_in.wma_period,
+                tp,
+                sl,
+            )
+            result = _solve_run(kernel_conf, None, df)
+            if result is None:
                 continue
 
+            kernel_conf, rec = result
             total_found += 1
-            total = rec.exit_total + found[0].rec.exit_total
+            total = rec.exit_total + filter_result.rec.exit_total
             if total >= best_total:
-                _log_new_max(logger, df, rec, found, total)
                 best_result = (
-                    found[0],
+                    filter_result,
                     BacktestResult(
-                        kernel_conf=found[1],
-                        best_df=df.copy(),
+                        kernel_conf=kernel_conf,
                         rec=rec,
                     ),
                 )
                 best_total = total
-            # else:
-            #     _log_found(logger, df, rec, found[1])
-
-            _recycle_df(df)
 
     logger.info("total_found: %s", total_found)
     if total_found == 0:
         logger.error("no combinations found")
-        return None
-
-    if best_result is not None:
-        q_res, v_res = best_result
-        report(q_res.best_df, chart_config.instrument, q_res.kernel_conf, 5)
-        report(v_res.best_df, backtest_config.verifier, v_res.kernel_conf, 5)
-    else:
-        logger.error("no best found")
         return None
 
     return best_result
@@ -377,15 +411,13 @@ def _log_progress(
         time_now = datetime.now()
         time_diff = time_now - start_time
         throughput = count / time_diff.total_seconds()
-        delta = timedelta(seconds=column_pair_len / throughput)
         logger.info(
-            "heartbeat: %s %s%% %s/%s %s/s %s left",
+            "heartbeat: %s %s%% %s/%s %s/s",
             total_found,
             round(100 * count / column_pair_len, 2),
             count,
             column_pair_len,
             round(throughput, 2),
-            delta,
         )
     return count
 
@@ -472,16 +504,10 @@ def _log_new_max(
     found: tuple[BacktestResult, KernelConfig],
     total: float,
 ):
-    wins = (df["exit_value"] > 0).astype(int).cumsum()
-    losses = (df["exit_value"] < 0).astype(int).cumsum()
     logger.debug(
         "new vmax found t:%s qt:%s qm:%s qe:%s w:%s l:%s %s",
         round(total, 5),
         round(rec.exit_total, 5),
-        round(df["exit_total"].min(), 5),
-        round(df["exit_value"].min(), 5),
-        wins.iloc[-1],
-        losses.iloc[-1],
         found[1],
     )
 
@@ -512,13 +538,16 @@ def _generate_filters(
     return found_filters
 
 
-def _is_invalid_rec(rec, df):
-    wins = (df["exit_value"] > 0).astype(int).cumsum()
+@jit(nopython=True)
+def _is_invalid_scenario(
+    exit_value: NDArray[np.float64], exit_total: NDArray[np.float64]
+) -> np.bool:
+    wins: np.float64 = np.where(exit_value > 0, 1, 0).astype(np.int64).sum()
+    final_exit_total: np.float64 = exit_total[-1]
     return (
-        wins.iloc[-1] == 0
-        or rec.exit_total < 0
+        wins == 0
+        or final_exit_total < 0
         or (
-            df["exit_total"].min() < 0
-            and abs(df["exit_total"].min()) > abs(rec.exit_total)
+            exit_value.min() < 0 and np.abs(exit_value.min()) > np.abs(final_exit_total)
         )
     )
