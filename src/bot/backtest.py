@@ -12,7 +12,7 @@ from core.chart import heiken_ashi_numpy
 from numpy.typing import NDArray
 from numba import jit  # type: ignore
 
-from core.kernel import EdgeCategory, KernelConfig, kernel, kernel_stage_1
+from core.kernel import EdgeCategory, KernelConfig, kernel_stage_1
 from bot.exchange import (
     getOandaOHLC,
     OandaContext,
@@ -205,7 +205,10 @@ def preprocess(df: pd.DataFrame, wma_period: int) -> pd.DataFrame:
 
     return df
 
-def _solve_run(kernel_conf_in: KernelConfig, config_tuple: tuple | None, df: pd.DataFrame) -> tuple[KernelConfig, pd.Series] | pd.Series | None:
+
+def _solve_run(
+    kernel_conf_in: KernelConfig, config_tuple: tuple | None, df: pd.DataFrame
+) -> tuple[KernelConfig, pd.Series] | pd.Series | None:
     # run the backtest
     if config_tuple is not None:
         kernel_conf = _map_kernel_conf(kernel_conf_in, config_tuple)
@@ -244,7 +247,7 @@ def _solve_run(kernel_conf_in: KernelConfig, config_tuple: tuple | None, df: pd.
     df["exit_total"] = exit_total
     df["running_total"] = running_total
     df["wma"] = wma
-    
+
     rec = df.iloc[-1].copy(deep=True)
     # recycle the dataframe to conserve on ram
     _recycle_df(df)
@@ -334,18 +337,25 @@ def solve(
                 )
             )
 
-        found_filters = _generate_filters(
-            kernel_conf_in, backtest_config, found_results
-        )
         count = 0
         total_found = 0
         df = verifier_orig_df.copy()
         filter_start_time = datetime.now()
-        gen = ((filter_result, tp, sl) for filter_result in found_results for tp in backtest_config.take_profit for sl in backtest_config.stop_loss)
+        filter_count = (
+            len(found_results)
+            * len(backtest_config.take_profit)
+            * len(backtest_config.stop_loss)
+        )
+        gen = (
+            (filter_result, tp, sl)
+            for filter_result in found_results
+            for tp in backtest_config.take_profit
+            for sl in backtest_config.stop_loss
+        )
         for f in gen:
             # log progress and filter invalid results
             count = _log_progress(
-                logger, len(found_filters), total_found, count, filter_start_time
+                logger, filter_count, total_found, count, filter_start_time
             )
 
             # run
@@ -479,63 +489,6 @@ def _map_kernel_conf(
     )
 
     return kernel_conf
-
-
-def _log_found(
-    logger: logging.Logger, df: pd.DataFrame, rec: pd.Series, kernel_conf: KernelConfig
-):
-    wins = (df["exit_value"] > 0).astype(int).cumsum()
-    losses = (df["exit_value"] < 0).astype(int).cumsum()
-    logger.debug(
-        "found qt:%s qm:%s qe:%s w:%s l:%s %s",
-        round(rec.exit_total, 5),
-        round(df["exit_total"].min(), 5),
-        round(df["exit_value"].min(), 5),
-        wins.iloc[-1],
-        losses.iloc[-1],
-        kernel_conf,
-    )
-
-
-def _log_new_max(
-    logger: logging.Logger,
-    df: pd.DataFrame,
-    rec: pd.Series,
-    found: tuple[BacktestResult, KernelConfig],
-    total: float,
-):
-    logger.debug(
-        "new vmax found t:%s qt:%s qm:%s qe:%s w:%s l:%s %s",
-        round(total, 5),
-        round(rec.exit_total, 5),
-        found[1],
-    )
-
-
-def _generate_filters(
-    kernel_conf_in: KernelConfig,
-    backtest_config: BacktestConfig,
-    found_results: list[BacktestResult],
-) -> list[tuple[BacktestResult, KernelConfig]]:
-    found_filters: list[tuple[BacktestResult, KernelConfig]] = []
-    for filter_result in found_results:
-        for tp in backtest_config.take_profit:
-            for sl in backtest_config.stop_loss:
-                found_filters.append(
-                    (
-                        filter_result,
-                        KernelConfig(
-                            filter_result.kernel_conf.signal_buy_column,
-                            filter_result.kernel_conf.signal_exit_column,
-                            filter_result.kernel_conf.source_column,
-                            kernel_conf_in.wma_period,
-                            tp,
-                            sl,
-                        ),
-                    )
-                )
-
-    return found_filters
 
 
 @jit(nopython=True)
