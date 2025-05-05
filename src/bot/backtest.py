@@ -115,6 +115,22 @@ def _preprocess(df: pd.DataFrame, wma_period: int) -> pd.DataFrame:
         df["close"].to_numpy(),
         timeperiod=wma_period,
     )
+
+    df["wma_open"] = talib.WMA(df["open"].to_numpy(), timeperiod=wma_period)
+    df["wma_high"] = talib.WMA(df["high"].to_numpy(), timeperiod=wma_period)
+    df["wma_low"] = talib.WMA(df["low"].to_numpy(), timeperiod=wma_period)
+    df["wma_close"] = talib.WMA(df["close"].to_numpy(), timeperiod=wma_period)
+
+    df["wma_ask_open"] = talib.WMA(df["ask_open"].to_numpy(), timeperiod=wma_period)
+    df["wma_ask_high"] = talib.WMA(df["ask_high"].to_numpy(), timeperiod=wma_period)
+    df["wma_ask_low"] = talib.WMA(df["ask_low"].to_numpy(), timeperiod=wma_period)
+    df["wma_ask_close"] = talib.WMA(df["ask_close"].to_numpy(), timeperiod=wma_period)
+
+    df["wma_bid_open"] = talib.WMA(df["bid_open"].to_numpy(), timeperiod=wma_period)
+    df["wma_bid_high"] = talib.WMA(df["bid_high"].to_numpy(), timeperiod=wma_period)
+    df["wma_bid_low"] = talib.WMA(df["bid_low"].to_numpy(), timeperiod=wma_period)
+    df["wma_bid_close"] = talib.WMA(df["bid_close"].to_numpy(), timeperiod=wma_period)
+
     # calculate the Heikin-Ashi candlesticks
     df["ha_open"], df["ha_high"], df["ha_low"], df["ha_close"] = heiken_ashi_numpy(
         df["open"].to_numpy(),
@@ -122,6 +138,10 @@ def _preprocess(df: pd.DataFrame, wma_period: int) -> pd.DataFrame:
         df["low"].to_numpy(),
         df["close"].to_numpy(),
     )
+    df["wma_ha_open"] = talib.WMA(df["ha_open"].to_numpy(), timeperiod=wma_period)
+    df["wma_ha_high"] = talib.WMA(df["ha_high"].to_numpy(), timeperiod=wma_period)
+    df["wma_ha_low"] = talib.WMA(df["ha_low"].to_numpy(), timeperiod=wma_period)
+    df["wma_ha_close"] = talib.WMA(df["ha_close"].to_numpy(), timeperiod=wma_period)
 
     # calculate the Heikin-Ashi candlesticks for the bid prices
     df["ha_bid_open"], df["ha_bid_high"], df["ha_bid_low"], df["ha_bid_close"] = (
@@ -131,6 +151,16 @@ def _preprocess(df: pd.DataFrame, wma_period: int) -> pd.DataFrame:
             df["bid_low"].to_numpy(),
             df["bid_close"].to_numpy(),
         )
+    )
+    df["wma_ha_bid_open"] = talib.WMA(
+        df["ha_bid_open"].to_numpy(), timeperiod=wma_period
+    )
+    df["wma_ha_bid_high"] = talib.WMA(
+        df["ha_bid_high"].to_numpy(), timeperiod=wma_period
+    )
+    df["wma_ha_bid_low"] = talib.WMA(df["ha_bid_low"].to_numpy(), timeperiod=wma_period)
+    df["wma_ha_bid_close"] = talib.WMA(
+        df["ha_bid_close"].to_numpy(), timeperiod=wma_period
     )
 
     # calculate the Heikin-Ashi candlesticks for the ask prices
@@ -142,11 +172,21 @@ def _preprocess(df: pd.DataFrame, wma_period: int) -> pd.DataFrame:
             df["ask_close"].to_numpy(),
         )
     )
+    df["wma_ha_ask_open"] = talib.WMA(
+        df["ha_ask_open"].to_numpy(), timeperiod=wma_period
+    )
+    df["wma_ha_ask_high"] = talib.WMA(
+        df["ha_ask_high"].to_numpy(), timeperiod=wma_period
+    )
+    df["wma_ha_ask_low"] = talib.WMA(df["ha_ask_low"].to_numpy(), timeperiod=wma_period)
+    df["wma_ha_ask_close"] = talib.WMA(
+        df["ha_ask_close"].to_numpy(), timeperiod=wma_period
+    )
 
     return df
 
 
-def backtest(  # noqa: C901, PLR0915
+def solve(  # noqa: C901, PLR0915
     chart_config: ChartConfig,
     kernel_conf_in: KernelConfig,
     token: str,
@@ -209,11 +249,8 @@ def backtest(  # noqa: C901, PLR0915
     with PerfTimer(start_time, logger):
         for config_tuple in column_pairs:
             kernel_conf = _map_kernel_conf(kernel_conf_in, config_tuple)
-            wma = talib.WMA(
-                orig_df[kernel_conf.source_column].to_numpy(), kernel_conf.wma_period
-            )
             df = orig_df.copy()
-            df["wma"] = wma
+            df["wma"] = orig_df[f"wma_{kernel_conf.wma_period}"]
             df = kernel(
                 df,
                 config=kernel_conf,
@@ -252,12 +289,8 @@ def backtest(  # noqa: C901, PLR0915
         )
         count = 0
         for found in found_filters:
-            wma = talib.WMA(
-                verifier_orig_df[kernel_conf.source_column].to_numpy(),
-                kernel_conf.wma_period,
-            )
             df = verifier_orig_df.copy()
-            df["wma"] = wma
+            df["wma"] = verifier_orig_df[f"wma_{found[1].wma_period}"]
             df = kernel(
                 df,
                 config=found[1],
