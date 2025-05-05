@@ -68,8 +68,8 @@ if __name__ == "__main__":
         if result is None:
             sys.exit(1)
 
-        logger.info("ins: %s %s", chart_conf.instrument, result[0].kernel_conf)
-        logger.info("ins: %s %s", backtest_conf.verifier, result[1].kernel_conf)
+        logger.info("ins: %s %s", result[0].instrument, result[0].kernel_conf)
+        logger.info("ins: %s %s", result[1].instrument, result[1].kernel_conf)
 
     elif sys.argv[1] in ["bot", "observe"]:
         # load config

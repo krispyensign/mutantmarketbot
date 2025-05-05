@@ -1,7 +1,7 @@
 """Backtest the trading strategy."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 import itertools
 import subprocess
 import numpy as np
@@ -103,6 +103,7 @@ class BacktestConfig:
 class BacktestResult:
     """BacktestResult class."""
 
+    instrument: str
     kernel_conf: KernelConfig
     rec: pd.Series
 
@@ -333,6 +334,7 @@ def solve(
             kernel_conf, rec = result
             found_results.append(
                 BacktestResult(
+                    instrument=chart_config.instrument,
                     kernel_conf=kernel_conf,
                     rec=rec,
                 )
@@ -382,6 +384,7 @@ def solve(
                     BacktestResult(
                         kernel_conf=kernel_conf,
                         rec=rec,
+                        instrument=backtest_config.verifier,
                     ),
                 )
                 best_total = total
@@ -422,13 +425,15 @@ def _log_progress(
         time_now = datetime.now()
         time_diff = time_now - start_time
         throughput = count / time_diff.total_seconds()
+        remaining = timedelta(seconds=(column_pair_len - count) / throughput)
         logger.info(
-            "heartbeat: %s %s%% %s/%s %s/s",
+            "heartbeat: %s %s%% %s/%s %s/s %s remaining",
             total_found,
             round(100 * count / column_pair_len, 2),
             count,
             column_pair_len,
             round(throughput, 2),
+            remaining,
         )
     return count
 
