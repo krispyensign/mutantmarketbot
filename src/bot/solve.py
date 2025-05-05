@@ -1,7 +1,7 @@
 """Backtest the trading strategy."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 import itertools
 import subprocess
 import pandas as pd
@@ -107,8 +107,28 @@ class BacktestResult:
     rec: pd.Series
 
 
-def _preprocess(df: pd.DataFrame, wma_period: int) -> pd.DataFrame:
+def preprocess(df: pd.DataFrame, wma_period: int) -> pd.DataFrame:
     # calculate the ATR for the trailing stop loss
+    """Preprocess the DataFrame to calculate various technical indicators.
+
+    This function calculates the Average True Range (ATR), Weighted Moving Averages (WMA)
+    for open, high, low, and close prices, and Heikin-Ashi candlesticks for both original
+    and bid/ask prices in the given DataFrame.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        A DataFrame containing columns for open, high, low, close, ask, and bid prices.
+    wma_period : int
+        The period to be used for calculating the Weighted Moving Averages (WMA).
+
+    Returns
+    -------
+    pd.DataFrame
+        The input DataFrame with additional columns for ATR, WMA, and Heikin-Ashi
+        candlesticks.
+
+    """
     df["atr"] = talib.ATR(
         df["high"].to_numpy(),
         df["low"].to_numpy(),
@@ -228,12 +248,12 @@ def solve(  # noqa: C901, PLR0915
     start_time = datetime.now()
 
     # get data and preprocess
-    orig_df = _preprocess(
+    orig_df = preprocess(
         _get_data(chart_config, token, logger), kernel_conf_in.wma_period
     )
 
     # get verifier data and preprocess
-    verifier_orig_df = _preprocess(
+    verifier_orig_df = preprocess(
         _get_data(chart_config, token, logger, backtest_config.verifier),
         kernel_conf_in.wma_period,
     )
@@ -273,7 +293,7 @@ def solve(  # noqa: C901, PLR0915
 
             total_found += 1
             total = rec.exit_total
-            _log_found(logger, df, rec, kernel_conf)
+            # _log_found(logger, df, rec, kernel_conf)
             _recycle_df(df)
 
         found_filters = _generate_filters(
@@ -290,7 +310,7 @@ def solve(  # noqa: C901, PLR0915
 
             # log progress and filter invalid results
             count = _log_progress(
-                logger, column_pair_len, total_found, count, filter_start_time
+                logger, len(found_filters), total_found, count, filter_start_time
             )
             if _is_invalid_rec(rec, df):
                 continue
@@ -308,8 +328,8 @@ def solve(  # noqa: C901, PLR0915
                     ),
                 )
                 best_total = total
-            else:
-                _log_found(logger, df, rec, found[1])
+            # else:
+            #     _log_found(logger, df, rec, found[1])
 
             _recycle_df(df)
 
@@ -357,7 +377,7 @@ def _log_progress(
         time_now = datetime.now()
         time_diff = time_now - start_time
         throughput = count / time_diff.total_seconds()
-        time_left = time_diff * (column_pair_len - total_found) / count
+        delta = timedelta(seconds=column_pair_len / throughput)
         logger.info(
             "heartbeat: %s %s%% %s/%s %s/s %s left",
             total_found,
@@ -365,7 +385,7 @@ def _log_progress(
             count,
             column_pair_len,
             round(throughput, 2),
-            time_left,
+            delta,
         )
     return count
 
@@ -375,7 +395,26 @@ def _get_data(
     token: str,
     logger: logging.Logger,
     instrument: str | None = None,
-):
+) -> pd.DataFrame:
+    """Get data from Oanda and return it as a DataFrame.
+
+    Parameters
+    ----------
+    chart_config : ChartConfig
+        The configuration for the chart.
+    token : str
+        The Oanda API token.
+    logger : logging.Logger
+        The logger to use.
+    instrument : str | None, optional
+        The instrument to get data for. The default is None, which means to use the instrument from the chart config.
+
+    Returns
+    -------
+    pd.DataFrame
+        The DataFrame containing the data.
+
+    """
     ctx = OandaContext(
         v20.Context("api-fxpractice.oanda.com", token=token),
         None,

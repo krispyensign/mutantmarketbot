@@ -7,7 +7,6 @@ import pandas as pd
 
 from core.calc import (
     entry_price,
-    exit_total,
     take_profit,
     stop_loss as sl,
 )
@@ -167,8 +166,8 @@ def kernel_stage_1(  # noqa: PLR0913
 
     Returns
     -------
-    tuple[NDArray[Any], NDArray[Any], NDArray[Any]]
-        A tuple containing the signal, trigger, and position value arrays.
+    tuple[NDArray[Any], NDArray[Any], NDArray[Any], NDArray[Any], NDArray[Any], NDArray[Any]]
+        A tuple containing the signal, trigger, position, exit value, exit total, and running total arrays.
 
     """
     # signal using the close prices
@@ -228,7 +227,11 @@ def kernel_stage_1(  # noqa: PLR0913
             if signal[i - 2] == 0 and signal[i - 1] == 1 and signal[i - 0] == 0:
                 signal[i - 1] = 0
 
-    return signal, trigger, position_value
+    exit_value = np.where(trigger == -1, position_value, 0)
+    et = np.cumsum(exit_value)
+    running_total = et + position_value * signal
+
+    return signal, trigger, position_value, exit_value, et, running_total
 
 
 def kernel(
@@ -256,7 +259,14 @@ def kernel(
 
     """
     # calculate the entry and exit signals
-    df["signal"], df["trigger"], df["position_value"] = kernel_stage_1(
+    (
+        df["signal"],
+        df["trigger"],
+        df["position_value"],
+        df["exit_value"],
+        df["exit_total"],
+        df["running_total"],
+    ) = kernel_stage_1(
         df[config.signal_buy_column].to_numpy(),
         df[config.signal_exit_column].to_numpy(),
         df["wma"].to_numpy(),
@@ -267,13 +277,6 @@ def kernel(
         config.stop_loss,
         config.signal_buy_column != config.signal_exit_column,
         config.edge == EdgeCategory.Quasi,
-    )
-
-    # calculate the exit total
-    df["exit_value"], df["exit_total"], df["running_total"] = exit_total(
-        df["position_value"].to_numpy(),
-        df["trigger"].to_numpy(),
-        df["signal"].to_numpy(),
     )
 
     return df
