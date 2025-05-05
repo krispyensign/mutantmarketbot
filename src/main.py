@@ -6,7 +6,7 @@ import sys
 
 import yaml
 
-from bot.backtest import BacktestConfig, ChartConfig, backtest
+from bot.backtest import BacktestConfig, ChartConfig, solve
 from bot.bot import TradeConfig, bot
 from core.kernel import KernelConfig
 import os
@@ -56,7 +56,7 @@ if __name__ == "__main__":
         pr = cProfile.Profile()
         pr.enable()
         try:
-            result = backtest(chart_conf, kernel_conf, TOKEN, backtest_conf)
+            result = solve(chart_conf, kernel_conf, TOKEN, backtest_conf)
         except KeyboardInterrupt:
             pr.disable()
             s = io.StringIO()

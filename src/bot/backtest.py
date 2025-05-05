@@ -247,27 +247,16 @@ def solve(  # noqa: C901, PLR0915
     count = 0
 
     with PerfTimer(start_time, logger):
+        df = orig_df.copy()
         for config_tuple in column_pairs:
+            # run the backtest
             kernel_conf = _map_kernel_conf(kernel_conf_in, config_tuple)
-            df = orig_df.copy()
-            df["wma"] = orig_df[f"wma_{kernel_conf.wma_period}"]
-            df = kernel(
-                df,
-                config=kernel_conf,
-            )
+            df["wma"] = df[f"wma_{kernel_conf.source_column}"]
+            df = kernel(df, config=kernel_conf)
             rec = df.iloc[-1]
-            if count == 0:
-                logger.info("starting pass 1")
-            count += 1
-            if count % 100 == 0:
-                logger.info(
-                    "heartbeat (pass 1): %s %s / %s",
-                    total_found,
-                    count,
-                    column_pair_len,
-                )
 
-            # if there are no wins, the total is worse, or the min total is worse then skip
+            # log progress and filter invalid results
+            count = _log_progress(logger, column_pair_len, total_found, count)
             if _is_invalid_rec(rec):
                 continue
 
@@ -275,29 +264,29 @@ def solve(  # noqa: C901, PLR0915
             found_results.append(
                 BacktestResult(
                     kernel_conf=kernel_conf,
-                    best_df=df,
-                    rec=rec,
+                    best_df=df.copy(),
+                    rec=rec.copy(),
                 )
             )
 
             total_found += 1
-            _log_found(logger, df, rec)
             total = rec.exit_total
+            _log_found(logger, df, rec)
+            _recycle_df(df)
 
         found_filters = _generate_filters(
             kernel_conf_in, backtest_config, found_results
         )
         count = 0
+        df = verifier_orig_df.copy()
         for found in found_filters:
-            df = verifier_orig_df.copy()
-            df["wma"] = verifier_orig_df[f"wma_{found[1].wma_period}"]
-            df = kernel(
-                df,
-                config=found[1],
-            )
+            # run the backtest
+            df["wma"] = verifier_orig_df[f"wma_{found[1].source_column}"]
+            df = kernel(df, config=found[1])
             rec = df.iloc[-1]
 
-            # if there are no wins, the total is worse, or the min total is worse then skip
+            # log progress and filter invalid results
+            count = _log_progress(logger, column_pair_len, total_found, count)
             if _is_invalid_rec(rec):
                 continue
 
@@ -309,21 +298,15 @@ def solve(  # noqa: C901, PLR0915
                     found[0],
                     BacktestResult(
                         kernel_conf=found[1],
-                        best_df=df,
+                        best_df=df.copy(),
                         rec=rec,
                     ),
                 )
                 best_total = total
             else:
                 _log_found(logger, df, rec)
-            count += 1
-            if count % 100 == 0:
-                logger.info(
-                    "heartbeat (pass 2): %s %s / %s",
-                    total_found,
-                    count,
-                    len(found_filters),
-                )
+
+            _recycle_df(df)
 
     logger.info("total_found: %s", total_found)
     if total_found == 0:
@@ -341,7 +324,45 @@ def solve(  # noqa: C901, PLR0915
     return best_result
 
 
-def _get_data(chart_config, token, logger, instrument: str | None = None):
+def _recycle_df(df):
+    df.drop(
+        columns=[
+            "signal",
+            "trigger",
+            "position_value",
+            "exit_value",
+            "exit_total",
+            "running_total",
+            "wins",
+            "losses",
+            "min_exit_total",
+        ],
+        inplace=True,
+    )
+
+
+def _log_progress(
+    logger: logging.Logger, column_pair_len: int, total_found: int, count: int
+) -> int:
+    if count == 0:
+        logger.info("starting pass 1")
+    count += 1
+    if count % 100 == 0:
+        logger.info(
+            "heartbeat (pass 1): %s %s / %s",
+            total_found,
+            count,
+            column_pair_len,
+        )
+    return count
+
+
+def _get_data(
+    chart_config: ChartConfig,
+    token: str,
+    logger: logging.Logger,
+    instrument: str | None = None,
+):
     ctx = OandaContext(
         v20.Context("api-fxpractice.oanda.com", token=token),
         None,
@@ -361,7 +382,9 @@ def _get_data(chart_config, token, logger, instrument: str | None = None):
     return orig_df
 
 
-def _map_kernel_conf(kernel_conf_in, config_tuple):
+def _map_kernel_conf(
+    kernel_conf_in: KernelConfig, config_tuple: tuple[str, str, str, float, float]
+) -> KernelConfig:
     kernel_conf = KernelConfig(
         wma_period=kernel_conf_in.wma_period,
         signal_buy_column=config_tuple[0],
@@ -374,7 +397,7 @@ def _map_kernel_conf(kernel_conf_in, config_tuple):
     return kernel_conf
 
 
-def _log_found(logger, df, rec):
+def _log_found(logger: logging.Logger, df: pd.DataFrame, rec: pd.Series):
     logger.debug(
         "found qt:%s qm:%s qe:%s w:%s l:%s",
         rec.exit_total,
@@ -385,7 +408,13 @@ def _log_found(logger, df, rec):
     )
 
 
-def _log_new_max(logger, df, rec, found, total):
+def _log_new_max(
+    logger: logging.Logger,
+    df: pd.DataFrame,
+    rec: pd.Series,
+    found: tuple[BacktestResult, KernelConfig],
+    total: float,
+):
     logger.debug(
         "new vmax found t:%s qt:%s qm:%s qe:%s w:%s l:%s %s",
         round(total, 5),
