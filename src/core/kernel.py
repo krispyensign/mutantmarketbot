@@ -270,6 +270,10 @@ def kernel(
     )
 
     # calculate the exit total
-    exit_total(df)
+    df["exit_value"], df["exit_total"], df["running_total"] = exit_total(
+        df["position_value"].to_numpy(),
+        df["trigger"].to_numpy(),
+        df["signal"].to_numpy(),
+    )
 
     return df

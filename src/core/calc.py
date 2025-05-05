@@ -1,34 +1,43 @@
 """Functions for calculating trading signals."""
 
 from typing import Any
-import pandas as pd
 import numpy as np
 from numpy.typing import NDArray
 from numba import jit  # type: ignore
 
 
-def exit_total(df: pd.DataFrame) -> None:
+@jit(nopython=True)
+def exit_total(
+    position_value: NDArray[np.float64],
+    trigger: NDArray[np.int64],
+    signal: NDArray[np.int64],
+) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
     """Calculate the cumulative total of all trades and the running total of the portfolio.
 
     Parameters
     ----------
-    df : pd.DataFrame
-        The DataFrame containing the trading data.
+    position_value : NDArray[Any]
+        The position values.
+    trigger : NDArray[Any]
+        The trigger values.
+    signal : NDArray[Any]
+        The signal values.
 
     Returns
     -------
-    pd.Dataframe
-        The DataFrame with the 'exit_total' and 'running_total' columns added.
+    tuple[NDArray[np.float64], NDArray[np.float64]]
+        A tuple containing the 'exit_value', 'exit_total' and 'running_total' arrays.
 
     Notes
     -----
-    The 'exit_total' column is the cumulative total of all trades, and the 'running_total' column
+    The 'exit_total' array is the cumulative total of all trades, and the 'running_total' array
     is the cumulative total of the portfolio, including the current trade.
 
     """
-    df["exit_value"] = df["position_value"] * ((df["trigger"] == -1).astype(int))
-    df["exit_total"] = df["exit_value"].cumsum()
-    df["running_total"] = df["exit_total"] + (df["position_value"] * df["signal"])
+    exit_value = np.where(trigger == -1, position_value, 0)
+    exit_total = np.cumsum(exit_value)
+    running_total = exit_total + position_value * signal
+    return exit_value, exit_total, running_total
 
 
 @jit(nopython=True)

@@ -256,7 +256,9 @@ def solve(  # noqa: C901, PLR0915
             rec = df.iloc[-1]
 
             # log progress and filter invalid results
-            count = _log_progress(logger, column_pair_len, total_found, count, APP_START_TIME)
+            count = _log_progress(
+                logger, column_pair_len, total_found, count, APP_START_TIME
+            )
             if _is_invalid_rec(rec, df):
                 continue
 
@@ -287,7 +289,9 @@ def solve(  # noqa: C901, PLR0915
             rec = df.iloc[-1]
 
             # log progress and filter invalid results
-            count = _log_progress(logger, column_pair_len, total_found, count, filter_start_time)
+            count = _log_progress(
+                logger, column_pair_len, total_found, count, filter_start_time
+            )
             if _is_invalid_rec(rec, df):
                 continue
 
@@ -340,7 +344,11 @@ def _recycle_df(df):
 
 
 def _log_progress(
-    logger: logging.Logger, column_pair_len: int, total_found: int, count: int, start_time: datetime
+    logger: logging.Logger,
+    column_pair_len: int,
+    total_found: int,
+    count: int,
+    start_time: datetime,
 ) -> int:
     if count == 0:
         logger.info("starting pass")
@@ -402,7 +410,9 @@ def _map_kernel_conf(
     return kernel_conf
 
 
-def _log_found(logger: logging.Logger, df: pd.DataFrame, rec: pd.Series, kernel_conf: KernelConfig):
+def _log_found(
+    logger: logging.Logger, df: pd.DataFrame, rec: pd.Series, kernel_conf: KernelConfig
+):
     wins = (df["exit_value"] > 0).astype(int).cumsum()
     losses = (df["exit_value"] < 0).astype(int).cumsum()
     logger.debug(
@@ -468,5 +478,8 @@ def _is_invalid_rec(rec, df):
     return (
         wins.iloc[-1] == 0
         or rec.exit_total < 0
-        or (df["exit_total"].min() < 0 and abs(df["exit_total"].min()) > abs(rec.exit_total))
+        or (
+            df["exit_total"].min() < 0
+            and abs(df["exit_total"].min()) > abs(rec.exit_total)
+        )
     )
