@@ -1,12 +1,13 @@
 """Main module."""
 
+from datetime import datetime
 import logging
 import logging.config
 import sys
 
 import yaml
 
-from bot.backtest import BacktestConfig, ChartConfig, solve
+from bot.backtest import BacktestConfig, ChartConfig, PerfTimer, solve
 from bot.bot import TradeConfig, bot
 from core.kernel import KernelConfig
 import os
@@ -31,6 +32,7 @@ USAGE = """
 
 
 if __name__ == "__main__":
+    start_time = datetime.now()
     if TOKEN is None or ACCOUNT_ID is None:
         print(sys.argv)
         print(USAGE)
@@ -55,18 +57,19 @@ if __name__ == "__main__":
         # run
         pr = cProfile.Profile()
         pr.enable()
-        try:
-            result = solve(chart_conf, kernel_conf, TOKEN, backtest_conf)
-        except Exception as err:
-            logger.error(err)
-            pr.disable()
-            s = io.StringIO()
-            sortby = SortKey.CUMULATIVE
-            ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
-            ps.print_stats(50)
-            print(s.getvalue())
-        if result is None:
-            sys.exit(1)
+        with PerfTimer(start_time, logger):
+            try:
+                result = solve(chart_conf, kernel_conf, TOKEN, backtest_conf)
+            except Exception as err:
+                logger.error(err)
+                pr.disable()
+                s = io.StringIO()
+                sortby = SortKey.CUMULATIVE
+                ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+                ps.print_stats(50)
+                print(s.getvalue())
+            if result is None:
+                sys.exit(1)
 
         logger.info("ins: %s %s", result[0].instrument, result[0].kernel_conf)
         logger.info("ins: %s %s", result[1].instrument, result[1].kernel_conf)

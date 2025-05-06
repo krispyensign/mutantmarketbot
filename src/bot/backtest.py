@@ -294,7 +294,6 @@ def solve(
         return None
 
     logger.info("git info: %s %s", commit, porcelain)
-    start_time = datetime.now()
 
     # get data and preprocess
     orig_df = preprocess(
@@ -316,78 +315,77 @@ def solve(
     count = 0
     filter_start_time = datetime.now()
 
-    with PerfTimer(start_time, logger):
-        df = orig_df.copy()
-        for config_tuple in column_pairs:
-            # log progress
-            count = _log_progress(
-                logger, column_pair_len, total_found, count, filter_start_time
+    df = orig_df.copy()
+    for config_tuple in column_pairs:
+        # log progress
+        count = _log_progress(
+            logger, column_pair_len, total_found, count, filter_start_time
+        )
+
+        # run
+        result = _solve_run(kernel_conf_in, config_tuple, df)
+        if result is None:
+            continue
+
+        # save result if valid
+        total_found += 1
+        kernel_conf, rec = result
+        found_results.append(
+            BacktestResult(
+                instrument=chart_config.instrument,
+                kernel_conf=kernel_conf,
+                rec=rec,
             )
+        )
 
-            # run
-            result = _solve_run(kernel_conf_in, config_tuple, df)
-            if result is None:
-                continue
+    count = 0
+    total_found = 0
+    df = verifier_orig_df.copy()
+    filter_start_time = datetime.now()
+    filter_count = (
+        len(found_results)
+        * len(backtest_config.take_profit)
+        * len(backtest_config.stop_loss)
+    )
+    gen = (
+        (filter_result, tp, sl)
+        for filter_result in found_results
+        for tp in backtest_config.take_profit
+        for sl in backtest_config.stop_loss
+    )
+    for f in gen:
+        # log progress and filter invalid results
+        count = _log_progress(
+            logger, filter_count, total_found, count, filter_start_time
+        )
 
-            # save result if valid
-            total_found += 1
-            kernel_conf, rec = result
-            found_results.append(
+        # run
+        filter_result, tp, sl = f
+        kernel_conf = KernelConfig(
+            filter_result.kernel_conf.signal_buy_column,
+            filter_result.kernel_conf.signal_exit_column,
+            filter_result.kernel_conf.source_column,
+            kernel_conf_in.wma_period,
+            tp,
+            sl,
+        )
+        result = _solve_run(kernel_conf, None, df)
+        if result is None:
+            continue
+
+        kernel_conf, rec = result
+        total_found += 1
+        total = rec.exit_total + filter_result.rec.exit_total
+        if total >= best_total:
+            best_result = (
+                filter_result,
                 BacktestResult(
-                    instrument=chart_config.instrument,
                     kernel_conf=kernel_conf,
                     rec=rec,
-                )
+                    instrument=backtest_config.verifier,
+                ),
             )
-
-        count = 0
-        total_found = 0
-        df = verifier_orig_df.copy()
-        filter_start_time = datetime.now()
-        filter_count = (
-            len(found_results)
-            * len(backtest_config.take_profit)
-            * len(backtest_config.stop_loss)
-        )
-        gen = (
-            (filter_result, tp, sl)
-            for filter_result in found_results
-            for tp in backtest_config.take_profit
-            for sl in backtest_config.stop_loss
-        )
-        for f in gen:
-            # log progress and filter invalid results
-            count = _log_progress(
-                logger, filter_count, total_found, count, filter_start_time
-            )
-
-            # run
-            filter_result, tp, sl = f
-            kernel_conf = KernelConfig(
-                filter_result.kernel_conf.signal_buy_column,
-                filter_result.kernel_conf.signal_exit_column,
-                filter_result.kernel_conf.source_column,
-                kernel_conf_in.wma_period,
-                tp,
-                sl,
-            )
-            result = _solve_run(kernel_conf, None, df)
-            if result is None:
-                continue
-
-            kernel_conf, rec = result
-            total_found += 1
-            total = rec.exit_total + filter_result.rec.exit_total
-            if total >= best_total:
-                best_result = (
-                    filter_result,
-                    BacktestResult(
-                        kernel_conf=kernel_conf,
-                        rec=rec,
-                        instrument=backtest_config.verifier,
-                    ),
-                )
-                best_total = total
+            best_total = total
 
     logger.info("total_found: %s", total_found)
     if total_found == 0:
