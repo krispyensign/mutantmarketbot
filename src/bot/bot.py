@@ -81,6 +81,8 @@ def bot_run(
                 ctx,
                 trade_conf.amount,
                 trade_conf.bot_id,
+                trailing_distance=kernel_conf.stop_loss*rec.atr,
+                take_profit=kernel_conf.take_profit*rec.atr + rec.ask_close,
             )
         # close order
         elif (rec.trigger == -1 and trade_id != -1) or (
