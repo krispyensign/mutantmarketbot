@@ -77,11 +77,12 @@ class ChartConfig:
     instrument: str
     granularity: str
     candle_count: int
+    datefrom: datetime | None = None
 
 
 @dataclass
-class BacktestConfig:
-    """BacktestConfig class."""
+class SolverConfig:
+    """SolverConfig class."""
 
     take_profit: list[float]
     stop_loss: list[float]
@@ -105,10 +106,10 @@ class BacktestResult:
 
     instrument: str
     kernel_conf: KernelConfig
-    rec: pd.Series
+    exit_total: np.float64
 
 
-def preprocess(df: pd.DataFrame, wma_period: int) -> pd.DataFrame:
+def preprocess(df: pd.DataFrame, wma_period: int, convert: bool) -> dict[str, NDArray] | pd.DataFrame:
     # calculate the ATR for the trailing stop loss
     """Preprocess the DataFrame to calculate various technical indicators.
 
@@ -204,12 +205,19 @@ def preprocess(df: pd.DataFrame, wma_period: int) -> pd.DataFrame:
         df["ha_ask_close"].to_numpy(), timeperiod=wma_period
     )
 
+    if convert:
+        result_dict: dict[str, NDArray[np.float64]] = {}
+        for k, v in df.to_dict('series').items():
+            result_dict[str(k)] = v.to_numpy()
+
+        return result_dict
+
     return df
 
 
 def _solve_run(
-    kernel_conf_in: KernelConfig, config_tuple: tuple | None, df: pd.DataFrame
-) -> tuple[KernelConfig, pd.Series] | pd.Series | None:
+    kernel_conf_in: KernelConfig, config_tuple: tuple | None, ask_column: NDArray[np.float64], atr: NDArray[np.float64], df: dict
+) -> tuple[KernelConfig, np.float64] | None:
     # run the backtest
     if config_tuple is not None:
         kernel_conf = _map_kernel_conf(kernel_conf_in, config_tuple)
@@ -217,19 +225,19 @@ def _solve_run(
         kernel_conf = kernel_conf_in
     wma = df[f"wma_{kernel_conf.source_column}"]
     (
-        signal,
-        trigger,
-        position_value,
+        _,
+        _,
+        _,
         exit_value,
         exit_total,
-        running_total,
+        _,
     ) = kernel_stage_1(
-        df[kernel_conf.signal_buy_column].to_numpy(),
-        df[kernel_conf.signal_exit_column].to_numpy(),
-        wma.to_numpy(),
-        df[kernel_conf.ask_column].to_numpy(),
-        df[kernel_conf.bid_column].to_numpy(),
-        df["atr"].to_numpy(),
+        df[kernel_conf.signal_buy_column],
+        df[kernel_conf.signal_exit_column],
+        wma,
+        ask_column,
+        df[kernel_conf.bid_column],
+        atr,
         kernel_conf.take_profit,
         kernel_conf.stop_loss,
         kernel_conf.signal_buy_column != kernel_conf.signal_exit_column,
@@ -240,26 +248,14 @@ def _solve_run(
     if _is_invalid_scenario(exit_value, exit_total):
         return None
 
-    # save results
-    df["signal"] = signal
-    df["trigger"] = trigger
-    df["position_value"] = position_value
-    df["exit_value"] = exit_value
-    df["exit_total"] = exit_total
-    df["running_total"] = running_total
-    df["wma"] = wma
-
-    rec = df.iloc[-1].copy(deep=True)
-    # recycle the dataframe to conserve on ram
-    _recycle_df(df)
-    return kernel_conf, rec
+    return kernel_conf, exit_total[-1]
 
 
 def solve(
     chart_config: ChartConfig,
     kernel_conf_in: KernelConfig,
     token: str,
-    backtest_config: BacktestConfig,
+    backtest_config: SolverConfig,
 ) -> tuple[BacktestResult, BacktestResult] | None:
     """Run a backtest of the trading strategy.
 
@@ -296,15 +292,15 @@ def solve(
     logger.info("git info: %s %s", commit, porcelain)
 
     # get data and preprocess
-    orig_df = preprocess(
-        _get_data(chart_config, token, logger), kernel_conf_in.wma_period
-    )
+    orig_df: dict[str, NDArray[np.float64]] = preprocess(
+        _get_data(chart_config, token, logger), kernel_conf_in.wma_period, True
+    ) # type: ignore
 
     # get verifier data and preprocess
-    verifier_orig_df = preprocess(
+    verifier_orig_df: dict[str, NDArray[np.float64]] = preprocess(
         _get_data(chart_config, token, logger, backtest_config.verifier),
-        kernel_conf_in.wma_period,
-    )
+        kernel_conf_in.wma_period, True
+    ) # type: ignore
 
     best_result: tuple[BacktestResult, BacktestResult] | None = None
     column_pairs, column_pair_len = backtest_config.get_column_pairs()
@@ -315,7 +311,9 @@ def solve(
     count = 0
     filter_start_time = datetime.now()
 
-    df = orig_df.copy()
+    df = orig_df
+    atr = df["atr"]
+    ask_column = df["ask_close"]
     for config_tuple in column_pairs:
         # log progress
         count = _log_progress(
@@ -323,18 +321,18 @@ def solve(
         )
 
         # run
-        result = _solve_run(kernel_conf_in, config_tuple, df)
+        result = _solve_run(kernel_conf_in, config_tuple, ask_column, atr, df)
         if result is None:
             continue
 
         # save result if valid
         total_found += 1
-        kernel_conf, rec = result
+        kernel_conf, et = result
         found_results.append(
             BacktestResult(
                 instrument=chart_config.instrument,
                 kernel_conf=kernel_conf,
-                rec=rec,
+                exit_total=et,
             )
         )
 
@@ -342,6 +340,8 @@ def solve(
     total_found = 0
     df = verifier_orig_df.copy()
     filter_start_time = datetime.now()
+    atr = df["atr"]
+    ask_column = df["ask_close"]
     filter_count = (
         len(found_results)
         * len(backtest_config.take_profit)
@@ -362,26 +362,28 @@ def solve(
         # run
         filter_result, tp, sl = f
         kernel_conf = KernelConfig(
-            filter_result.kernel_conf.signal_buy_column,
-            filter_result.kernel_conf.signal_exit_column,
-            filter_result.kernel_conf.source_column,
-            kernel_conf_in.wma_period,
-            tp,
-            sl,
+            signal_buy_column=filter_result.kernel_conf.signal_buy_column,
+            signal_exit_column=filter_result.kernel_conf.signal_exit_column,
+            source_column=filter_result.kernel_conf.source_column,
+            wma_period=kernel_conf_in.wma_period,
+            take_profit=tp,
+            stop_loss=sl,
         )
-        result = _solve_run(kernel_conf, None, df)
+        result = _solve_run(kernel_conf, None, ask_column, atr, df)
         if result is None:
             continue
 
-        kernel_conf, rec = result
+        kernel_conf, et = result
         total_found += 1
-        total = rec.exit_total + filter_result.rec.exit_total
-        if total >= best_total:
+        total = et + filter_result.exit_total
+        if total > best_total:
+            logger.debug(
+                f"found result: {kernel_conf.source_column} {kernel_conf.signal_buy_column} {kernel_conf.signal_exit_column} {kernel_conf.take_profit} {kernel_conf.stop_loss} {round(et, 5)} {round(total, 5)}")
             best_result = (
                 filter_result,
                 BacktestResult(
                     kernel_conf=kernel_conf,
-                    rec=rec,
+                    exit_total=et,
                     instrument=backtest_config.verifier,
                 ),
             )
@@ -393,20 +395,6 @@ def solve(
         return None
 
     return best_result
-
-
-def _recycle_df(df):
-    df.drop(
-        columns=[
-            "signal",
-            "trigger",
-            "position_value",
-            "exit_value",
-            "exit_total",
-            "running_total",
-        ],
-        inplace=True,
-    )
 
 
 def _log_progress(
