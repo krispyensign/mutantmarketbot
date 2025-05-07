@@ -105,9 +105,24 @@ class BacktestResult:
 
     instrument: str
     kernel_conf: KernelConfig
-    ratio: np.float64
     exit_total: np.float64
     sample_total: np.float64
+    ratio: np.float64
+    sratio: np.float64
+    wins: np.int64
+    losses: np.int64
+
+    def __str__(self):
+        """Return a string representation of the BacktestResult object."""
+        return (f"result: {self.kernel_conf}" 
+                "et:{self.exit_total}"
+                 f"st:{self.sample_total}" 
+                 f"r:{self.ratio}"
+                 f"sr:{self.sratio}"
+                 f"wins:{self.wins}"
+                 f"losses:{self.losses}"
+                 )
+        
 
 
 def preprocess(
@@ -231,7 +246,7 @@ def _solve_run(
     ask_column: NDArray[np.float64],
     atr: NDArray[np.float64],
     df: dict,
-) -> tuple[KernelConfig, np.float64, np.float64] | None:
+) -> tuple[KernelConfig, np.float64, np.int64, np.int64] | None:
     # run the backtest
     if config_tuple is not None:
         kernel_conf = _map_kernel_conf(kernel_conf_in, config_tuple)
@@ -258,16 +273,19 @@ def _solve_run(
         kernel_conf.edge == EdgeCategory.Quasi,
     )
 
-    # filter invalid results
-    if _is_invalid_scenario(exit_value, exit_total):
+    final_total = exit_total[-1] if exit_total[-1] > 0 else np.float64(0.0)
+    if final_total <= 0.0:
         return None
+    
+    wins: np.int64 = np.where(exit_value > 0, 1, 0).astype(np.int64).sum()
+    losses: np.int64 = np.where(exit_value < 0, 1, 0).astype(np.int64).sum()
 
-    wins = np.where(exit_value > 0, 1, 0).astype(np.int64).sum()
-    losses = np.where(exit_value < 0, 1, 0).astype(np.int64).sum()
-    if wins + losses == 0:
-        return kernel_conf, np.float64(0.0), np.float64(0.0)
-    ratio = wins / (wins + losses)
-    return kernel_conf, ratio, exit_total[-1]
+    return (
+        kernel_conf,
+        final_total,
+        wins,
+        losses
+    )
 
 
 def solve(
@@ -316,7 +334,7 @@ def solve(
     )  # type: ignore
 
     # partition final 10% of orig_df rows into a separate df
-    split_idx = int(len(orig_df["close"]) * 0.9)
+    split_idx = int(len(orig_df["close"]) * 0.5)
     orig_df_train = orig_df.iloc[:split_idx]
     logger.info(f"train rows: {len(orig_df_train)}")
     orig_df_test = orig_df.iloc[split_idx:]
@@ -357,27 +375,28 @@ def solve(
 
         # save result if valid
         total_found += 1
-        kernel_conf, ratio, et = result
-        _, _, st = sample_result
+        kernel_conf, et, wins, losses = result
+        _, st, swins, slosses = sample_result
+        ratio = (wins / (wins + losses)).astype(np.float64)
+        sratio = (swins / (swins + slosses)).astype(np.float64)
+        total_wins = wins + swins
+        total_losses = losses + slosses
         if (
             best_result is None
-            or (ratio != 1.0 and ratio > best_result.ratio)
-            and (et > best_result.exit_total or st > best_result.sample_total)
+            or (ratio >= best_result.ratio or sratio >= best_result.sratio)
+            and (et >= best_result.exit_total and st >= best_result.sample_total)
         ):
-            logger.info(
-                "result: %s r:%s et:%s st:%s",
-                kernel_conf,
-                round(ratio, 2),
-                round(et, 5),
-                round(st, 5),
-            )
             best_result = BacktestResult(
                 chart_config.instrument,
                 kernel_conf,
-                ratio,
                 et,
                 st,
+                ratio,
+                sratio,
+                total_wins,
+                total_losses,
             )
+            logger.info(best_result)
 
     logger.info("total_found: %s", total_found)
     if total_found == 0:
@@ -472,17 +491,3 @@ def _map_kernel_conf(
 
     return kernel_conf
 
-
-@jit(nopython=True)
-def _is_invalid_scenario(
-    exit_value: NDArray[np.float64], exit_total: NDArray[np.float64]
-) -> np.bool:
-    wins: np.float64 = np.where(exit_value > 0, 1, 0).astype(np.int64).sum()
-    final_exit_total: np.float64 = exit_total[-1]
-    return (
-        wins == 0
-        or final_exit_total < 0
-        or (
-            exit_value.min() < 0 and np.abs(exit_value.min()) > np.abs(final_exit_total)
-        )
-    )

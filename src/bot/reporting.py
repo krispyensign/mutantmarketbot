@@ -1,10 +1,12 @@
 """Functions for reporting trading results."""
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 import pandas as pd
 import logging
 
 from core.kernel import KernelConfig
+
+APP_START_TIME = datetime.now()
 
 
 def report(
@@ -49,6 +51,8 @@ def report(
     df_ticks["completed_datetime"] = (
         (timedelta(minutes=5) + df_ticks["timestamp"]).dt
     ).strftime("%Y-%m-%d %H:%M:%S")
+    # recent_ticks = df_ticks.where(df_ticks["timestamp"] > APP_START_TIME)
+    # logger.info("total %s", recent_ticks["exit_value"].sum())
     df_orders = df_ticks.copy()
     df_orders = df_orders[df_orders["trigger"] != 0]
     round_amount = 3 if "JPY" in instrument else 5

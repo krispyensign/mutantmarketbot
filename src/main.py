@@ -7,7 +7,7 @@ import sys
 
 import yaml
 
-from bot.solve import SolverConfig, ChartConfig, solve
+from bot.solve import PerfTimer, SolverConfig, ChartConfig, solve
 from bot.bot import TradeConfig, bot
 from core.kernel import KernelConfig
 import os
@@ -57,9 +57,9 @@ if __name__ == "__main__":
         # run
         pr = cProfile.Profile()
         pr.enable()
-        # with PerfTimer(start_time, logger):
-        # try:
-        result = solve(chart_conf, kernel_conf, TOKEN, backtest_conf)
+        with PerfTimer(start_time, logger):
+            # try:
+            result = solve(chart_conf, kernel_conf, TOKEN, backtest_conf)
         # except:
         #     pr.disable()
         #     s = io.StringIO()
