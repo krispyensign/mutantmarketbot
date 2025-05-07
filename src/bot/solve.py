@@ -115,7 +115,7 @@ class BacktestResult:
         """Return a string representation of the BacktestResult object."""
         return (
             f"result: {self.kernel_conf}"
-            "et:{self.exit_total}"
+            f"et:{self.exit_total}"
             f"st:{self.sample_total}"
             f"r:{self.ratio}"
             f"sr:{self.sratio}"
