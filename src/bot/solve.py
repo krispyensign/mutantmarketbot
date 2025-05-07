@@ -106,7 +106,7 @@ class BacktestResult:
 
     instrument: str
     kernel_conf: KernelConfig
-    exit_total: np.float64
+    wins: np.int64
 
 
 def preprocess(df: pd.DataFrame, wma_period: int, convert: bool) -> dict[str, NDArray] | pd.DataFrame:
@@ -123,6 +123,8 @@ def preprocess(df: pd.DataFrame, wma_period: int, convert: bool) -> dict[str, ND
         A DataFrame containing columns for open, high, low, close, ask, and bid prices.
     wma_period : int
         The period to be used for calculating the Weighted Moving Averages (WMA).
+    convert: bool
+        If True, convert the DataFrame to a dictionary of NumPy arrays.
 
     Returns
     -------
@@ -217,7 +219,7 @@ def preprocess(df: pd.DataFrame, wma_period: int, convert: bool) -> dict[str, ND
 
 def _solve_run(
     kernel_conf_in: KernelConfig, config_tuple: tuple | None, ask_column: NDArray[np.float64], atr: NDArray[np.float64], df: dict
-) -> tuple[KernelConfig, np.float64] | None:
+) -> tuple[KernelConfig, np.int64] | None:
     # run the backtest
     if config_tuple is not None:
         kernel_conf = _map_kernel_conf(kernel_conf_in, config_tuple)
@@ -248,7 +250,8 @@ def _solve_run(
     if _is_invalid_scenario(exit_value, exit_total):
         return None
 
-    return kernel_conf, exit_total[-1]
+    wins = np.where(exit_value > 0, 1, 0).astype(np.int64).sum()
+    return kernel_conf, wins 
 
 
 def solve(
@@ -307,7 +310,7 @@ def solve(
     logger.info(f"total_combinations: {column_pair_len}")
     total_found = 0
     found_results: list[BacktestResult] = []
-    best_total = 0.0
+    best_total = 0
     count = 0
     filter_start_time = datetime.now()
 
@@ -327,12 +330,12 @@ def solve(
 
         # save result if valid
         total_found += 1
-        kernel_conf, et = result
+        kernel_conf, wins = result
         found_results.append(
             BacktestResult(
                 instrument=chart_config.instrument,
                 kernel_conf=kernel_conf,
-                exit_total=et,
+                wins=wins,
             )
         )
 
@@ -373,21 +376,21 @@ def solve(
         if result is None:
             continue
 
-        kernel_conf, et = result
+        kernel_conf, wins = result
         total_found += 1
-        total = et + filter_result.exit_total
-        if total > best_total:
+        total_wins = wins + filter_result.wins
+        if total_wins > best_total:
             logger.debug(
-                f"found result: {kernel_conf.source_column} {kernel_conf.signal_buy_column} {kernel_conf.signal_exit_column} {kernel_conf.take_profit} {kernel_conf.stop_loss} {round(et, 5)} {round(total, 5)}")
+                f"found result: {kernel_conf.source_column} {kernel_conf.signal_buy_column} {kernel_conf.signal_exit_column} {kernel_conf.take_profit} {kernel_conf.stop_loss} {round(wins, 5)} {round(total_wins, 5)}")
             best_result = (
                 filter_result,
                 BacktestResult(
                     kernel_conf=kernel_conf,
-                    exit_total=et,
+                    wins=wins,
                     instrument=backtest_config.verifier,
                 ),
             )
-            best_total = total
+            best_total = int(total_wins)
 
     logger.info("total_found: %s", total_found)
     if total_found == 0:
