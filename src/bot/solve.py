@@ -87,7 +87,6 @@ class SolverConfig:
     take_profit: list[float]
     stop_loss: list[float]
     source_columns: list[str]
-    verifier: str
 
     def get_column_pairs(self) -> tuple[itertools.product, int]:
         """Get column pairs."""
