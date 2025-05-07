@@ -11,10 +11,6 @@ from bot.solve import PerfTimer, SolverConfig, ChartConfig, solve
 from bot.bot import BotConfig, OandaConfig, TradeConfig, bot
 from core.kernel import KernelConfig
 import os
-import cProfile
-# import pstats
-# import io
-# from pstats import SortKey
 
 TOKEN = os.environ.get("OANDA_TOKEN")
 ACCOUNT_ID = os.environ.get("OANDA_ACCOUNT_ID")
@@ -55,18 +51,8 @@ if __name__ == "__main__":
         sl = conf["stop_loss"] if "stop_loss" in conf else [0.0]
 
         # run
-        pr = cProfile.Profile()
-        pr.enable()
         with PerfTimer(start_time, logger):
-            # try:
             result = solve(chart_conf, kernel_conf, TOKEN, backtest_conf)
-        # except:
-        #     pr.disable()
-        #     s = io.StringIO()
-        #     sortby = SortKey.CUMULATIVE
-        #     ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
-        #     ps.print_stats(50)
-        #     print(s.getvalue())
         if result is None:
             sys.exit(1)
 
