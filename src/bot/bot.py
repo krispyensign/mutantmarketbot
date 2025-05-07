@@ -48,7 +48,7 @@ def bot_run(
         df = getOandaOHLC(
             ctx, count=chart_conf.candle_count, granularity=chart_conf.granularity
         )
-        df: pd.DataFrame = preprocess(df, kernel_conf.wma_period, False) # type: ignore
+        df: pd.DataFrame = preprocess(df, kernel_conf.wma_period, False)  # type: ignore
     except Exception as err:
         return -1, None, err
 
@@ -81,8 +81,8 @@ def bot_run(
                 ctx,
                 trade_conf.amount,
                 trade_conf.bot_id,
-                trailing_distance=kernel_conf.stop_loss*rec.atr,
-                take_profit=kernel_conf.take_profit*rec.atr + rec.ask_close,
+                trailing_distance=kernel_conf.stop_loss * rec.atr,
+                take_profit=kernel_conf.take_profit * rec.atr + rec.ask_close,
             )
         # close order
         elif (rec.trigger == -1 and trade_id != -1) or (

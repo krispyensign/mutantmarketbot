@@ -7,14 +7,14 @@ import sys
 
 import yaml
 
-from bot.solve import SolverConfig, ChartConfig, PerfTimer, solve
+from bot.solve import SolverConfig, ChartConfig, solve
 from bot.bot import TradeConfig, bot
 from core.kernel import KernelConfig
 import os
 import cProfile
-import pstats
-import io
-from pstats import SortKey
+# import pstats
+# import io
+# from pstats import SortKey
 
 TOKEN = os.environ.get("OANDA_TOKEN")
 ACCOUNT_ID = os.environ.get("OANDA_ACCOUNT_ID")
@@ -70,8 +70,7 @@ if __name__ == "__main__":
         if result is None:
             sys.exit(1)
 
-        logger.info("ins: %s %s", result[0].instrument, result[0].kernel_conf)
-        logger.info("ins: %s %s", result[1].instrument, result[1].kernel_conf)
+        logger.info("ins: %s", result)
 
     elif sys.argv[1] in ["bot", "observe"]:
         # load config
