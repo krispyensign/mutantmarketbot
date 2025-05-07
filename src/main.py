@@ -1,19 +1,20 @@
 """Main module."""
 
+from datetime import datetime
 import logging
 import logging.config
 import sys
 
 import yaml
 
-from bot.backtest import BacktestConfig, ChartConfig, solve
+from bot.solve import SolverConfig, ChartConfig, solve
 from bot.bot import TradeConfig, bot
 from core.kernel import KernelConfig
 import os
 import cProfile
-import pstats
-import io
-from pstats import SortKey
+# import pstats
+# import io
+# from pstats import SortKey
 
 TOKEN = os.environ.get("OANDA_TOKEN")
 ACCOUNT_ID = os.environ.get("OANDA_ACCOUNT_ID")
@@ -31,6 +32,7 @@ USAGE = """
 
 
 if __name__ == "__main__":
+    start_time = datetime.now()
     if TOKEN is None or ACCOUNT_ID is None:
         print(sys.argv)
         print(USAGE)
@@ -41,7 +43,7 @@ if __name__ == "__main__":
         conf = yaml.safe_load(open(sys.argv[2]))
         chart_conf = ChartConfig(**conf["chart_config"])
         kernel_conf = KernelConfig(**conf["kernel_config"])
-        backtest_conf = BacktestConfig(**conf["backtest_config"])
+        backtest_conf = SolverConfig(**conf["backtest_config"])
 
         # setup logging
         logging_conf = conf["logging"]
@@ -55,21 +57,20 @@ if __name__ == "__main__":
         # run
         pr = cProfile.Profile()
         pr.enable()
-        try:
-            result = solve(chart_conf, kernel_conf, TOKEN, backtest_conf)
-        except Exception as err:
-            logger.error(err)
-            pr.disable()
-            s = io.StringIO()
-            sortby = SortKey.CUMULATIVE
-            ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
-            ps.print_stats(50)
-            print(s.getvalue())
+        # with PerfTimer(start_time, logger):
+        # try:
+        result = solve(chart_conf, kernel_conf, TOKEN, backtest_conf)
+        # except:
+        #     pr.disable()
+        #     s = io.StringIO()
+        #     sortby = SortKey.CUMULATIVE
+        #     ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+        #     ps.print_stats(50)
+        #     print(s.getvalue())
         if result is None:
             sys.exit(1)
 
-        logger.info("ins: %s %s", result[0].instrument, result[0].kernel_conf)
-        logger.info("ins: %s %s", result[1].instrument, result[1].kernel_conf)
+        logger.info("ins: %s", result)
 
     elif sys.argv[1] in ["bot", "observe"]:
         # load config

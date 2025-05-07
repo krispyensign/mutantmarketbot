@@ -8,7 +8,7 @@ import uuid
 import v20  # type: ignore
 import pandas as pd
 
-from bot.backtest import ChartConfig, PerfTimer, get_git_info, preprocess
+from bot.solve import ChartConfig, PerfTimer, get_git_info, preprocess
 from core.kernel import EdgeCategory, KernelConfig, kernel
 from bot.reporting import report
 from bot.exchange import (
@@ -48,7 +48,7 @@ def bot_run(
         df = getOandaOHLC(
             ctx, count=chart_conf.candle_count, granularity=chart_conf.granularity
         )
-        df = preprocess(df, kernel_conf.wma_period)
+        df: pd.DataFrame = preprocess(df, kernel_conf.wma_period, False)  # type: ignore
     except Exception as err:
         return -1, None, err
 
