@@ -10,7 +10,6 @@ import talib
 import v20  # type: ignore
 from core.chart import heiken_ashi_numpy
 from numpy.typing import NDArray
-from numba import jit  # type: ignore
 
 from core.kernel import EdgeCategory, KernelConfig, kernel_stage_1
 from bot.exchange import (
@@ -114,15 +113,15 @@ class BacktestResult:
 
     def __str__(self):
         """Return a string representation of the BacktestResult object."""
-        return (f"result: {self.kernel_conf}" 
-                "et:{self.exit_total}"
-                 f"st:{self.sample_total}" 
-                 f"r:{self.ratio}"
-                 f"sr:{self.sratio}"
-                 f"wins:{self.wins}"
-                 f"losses:{self.losses}"
-                 )
-        
+        return (
+            f"result: {self.kernel_conf}"
+            "et:{self.exit_total}"
+            f"st:{self.sample_total}"
+            f"r:{self.ratio}"
+            f"sr:{self.sratio}"
+            f"wins:{self.wins}"
+            f"losses:{self.losses}"
+        )
 
 
 def preprocess(
@@ -276,16 +275,11 @@ def _solve_run(
     final_total = exit_total[-1] if exit_total[-1] > 0 else np.float64(0.0)
     if final_total <= 0.0:
         return None
-    
+
     wins: np.int64 = np.where(exit_value > 0, 1, 0).astype(np.int64).sum()
     losses: np.int64 = np.where(exit_value < 0, 1, 0).astype(np.int64).sum()
 
-    return (
-        kernel_conf,
-        final_total,
-        wins,
-        losses
-    )
+    return (kernel_conf, final_total, wins, losses)
 
 
 def solve(
@@ -490,4 +484,3 @@ def _map_kernel_conf(
     )
 
     return kernel_conf
-
