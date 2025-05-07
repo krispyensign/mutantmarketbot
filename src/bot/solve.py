@@ -115,10 +115,10 @@ class BacktestResult:
         """Return a string representation of the BacktestResult object."""
         return (
             f"result: {self.kernel_conf}"
-            f"et:{self.exit_total}"
-            f"st:{self.sample_total}"
-            f"r:{self.ratio}"
-            f"sr:{self.sratio}"
+            f"et:{round(self.exit_total, 5)}"
+            f"st:{round(self.sample_total, 5)}"
+            f"r:{round(self.ratio, 5)}"
+            f"sr:{round(self.sratio, 5)}"
             f"wins:{self.wins}"
             f"losses:{self.losses}"
         )
