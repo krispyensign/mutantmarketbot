@@ -329,31 +329,36 @@ def solve(
 
     # partition final 10% of orig_df rows into a separate df
     split_idx = int(len(orig_df["close"]) * 0.5)
-    orig_df_train = orig_df.iloc[:split_idx]
-    logger.info(f"train rows: {len(orig_df_train)}")
-    orig_df_test = orig_df.iloc[split_idx:]
-    logger.info(f"test rows: {len(orig_df_test)}")
 
+    # split into train
+    df_train = _convert_to_dict(orig_df.iloc[:split_idx])
+    atr_train = df_train["atr"]
+    ask_column_train = df_train["ask_close"]
+
+    # and test
+    df_test = _convert_to_dict(orig_df.iloc[split_idx:])
+    atr_test = df_test["atr"]
+    ask_column_test = df_test["ask_close"]
+
+    # init
     best_result: BacktestResult | None = None
     column_pairs, column_pair_len = backtest_config.get_column_pairs()
-    logger.info(f"total_combinations: {column_pair_len}")
     total_found = 0
     count = 0
     filter_start_time = datetime.now()
 
-    df_train = _convert_to_dict(orig_df_train)
-    atr_train = df_train["atr"]
-    ask_column_train = df_train["ask_close"]
-    df_test = _convert_to_dict(orig_df_test)
-    atr_test = df_test["atr"]
-    ask_column_test = df_test["ask_close"]
+    logger.info(f"train rows: {len(atr_train)}")
+    logger.info(f"test rows: {len(atr_test)}")
+    logger.info(f"total_combinations: {column_pair_len}")
+
+    # run all combinations
     for config_tuple in column_pairs:
         # log progress
         count = _log_progress(
             logger, column_pair_len, total_found, count, filter_start_time
         )
 
-        # run training set
+        # run on training set
         result = _solve_run(
             kernel_conf_in, config_tuple, ask_column_train, atr_train, df_train
         )
@@ -367,14 +372,12 @@ def solve(
         if sample_result is None:
             continue
 
-        # save result if valid
+        # update best
         total_found += 1
         kernel_conf, et, wins, losses = result
         _, st, swins, slosses = sample_result
         ratio = (wins / (wins + losses)).astype(np.float64)
         sratio = (swins / (swins + slosses)).astype(np.float64)
-        total_wins = wins + swins
-        total_losses = losses + slosses
         if (
             best_result is None
             or (ratio >= best_result.ratio or sratio >= best_result.sratio)
@@ -387,8 +390,8 @@ def solve(
                 st,
                 ratio,
                 sratio,
-                total_wins,
-                total_losses,
+                wins + swins,
+                losses + slosses,
             )
             logger.info(best_result)
 
