@@ -114,12 +114,12 @@ class BacktestResult:
     def __str__(self):
         """Return a string representation of the BacktestResult object."""
         return (
-            f"result: {self.kernel_conf}"
-            f"et:{round(self.exit_total, 5)}"
-            f"st:{round(self.sample_total, 5)}"
-            f"r:{round(self.ratio, 5)}"
-            f"sr:{round(self.sratio, 5)}"
-            f"wins:{self.wins}"
+            f"result: {self.kernel_conf} "
+            f"et:{round(self.exit_total, 5)} "
+            f"st:{round(self.sample_total, 5)} "
+            f"r:{round(self.ratio, 5)} "
+            f"sr:{round(self.sratio, 5)} "
+            f"wins:{self.wins} "
             f"losses:{self.losses}"
         )
 
