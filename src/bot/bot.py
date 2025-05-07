@@ -113,13 +113,27 @@ def get_rec(kernel_conf, trade_id, df):
     return rec
 
 
+@dataclass
+class BotConfig:
+    """Configuration for the bot."""
+
+    chart_conf: ChartConfig
+    kernel_conf: KernelConfig
+    trade_conf: TradeConfig
+    observe_only: bool
+
+
+@dataclass
+class OandaConfig:
+    """Configuration for Oanda."""
+
+    token: str
+    account_id: str
+
+
 def bot(
-    token: str,
-    account_id: str,
-    chart_conf: ChartConfig,
-    kernel_conf: KernelConfig,
-    trade_conf: TradeConfig,
-    observe_only: bool,
+    oanda_conf: OandaConfig,
+    bot_conf: BotConfig,
 ) -> None:
     """Bot that trades on Oanda.
 
@@ -128,18 +142,10 @@ def bot(
 
     Parameters
     ----------
-    token : str
-        The Oanda API token.
-    account_id : str
-        The Oanda account ID.
-    chart_conf : ChartConfig
-        The chart configuration.
-    kernel_conf : KernelConfig
-        The kernel configuration.
-    trade_conf : TradeConfig
-        The trade configuration.
-    observe_only : bool, optional
-        Whether to observe only. The default is False.
+    oanda_conf : OandaConfig
+        A dataclass containing the configuration for Oanda.
+    bot_conf : BotConfig
+        A dataclass containing the configuration for the bot.
 
     """
     logger = logging.getLogger("bot")
@@ -149,15 +155,15 @@ def bot(
         logger.error("Failed to get Git info")
         return None
 
-    if not observe_only:
+    if not bot_conf.observe_only:
         sleep_until_next_5_minute(trade_id=-1)
 
     # create Oanda context
     ctx = OandaContext(
-        ctx=v20.Context("api-fxpractice.oanda.com", token=token),
-        account_id=account_id,
-        token=token,
-        instrument=chart_conf.instrument,
+        ctx=v20.Context("api-fxpractice.oanda.com", token=oanda_conf.token),
+        account_id=oanda_conf.account_id,
+        token=oanda_conf.token,
+        instrument=bot_conf.chart_conf.instrument,
     )
 
     # run bot
@@ -168,10 +174,10 @@ def bot(
         with PerfTimer(APP_START_TIME, logger):
             trade_id, df, err = bot_run(
                 ctx,
-                kernel_conf,
-                chart_conf=chart_conf,
-                trade_conf=trade_conf,
-                observe_only=observe_only,
+                bot_conf.kernel_conf,
+                chart_conf=bot_conf.chart_conf,
+                trade_conf=bot_conf.trade_conf,
+                observe_only=bot_conf.observe_only,
             )
         if err is not None:
             logger.error(err)
@@ -188,14 +194,12 @@ def bot(
             )
 
         logger.info(f"git commit: {git_info[0]}, porcelain: {git_info[1]}")
-        log_event(
-            chart_conf, kernel_conf, trade_conf, observe_only, logger, trade_id, df
-        )
+        log_event(logger, bot_conf, trade_id, df)
 
-        if observe_only:
+        if bot_conf.observe_only:
             break
 
-        if trade_id != -1 and kernel_conf.edge == EdgeCategory.Fast:
+        if trade_id != -1 and bot_conf.kernel_conf.edge == EdgeCategory.Fast:
             sleep(1)
             continue
 
@@ -203,11 +207,8 @@ def bot(
 
 
 def log_event(
-    chart_conf: ChartConfig,
-    kernel_conf: KernelConfig,
-    trade_conf: TradeConfig,
-    observe_only: bool,
     logger: logging.Logger,
+    bot_conf: BotConfig,
     trade_id: int,
     df: pd.DataFrame | None,
 ) -> None:
@@ -215,16 +216,10 @@ def log_event(
 
     Parameters
     ----------
-    chart_conf : ChartConfig
-        The chart configuration.
-    kernel_conf : KernelConfig
-        The kernel configuration.
-    trade_conf : TradeConfig
-        The trade configuration.
-    observe_only : bool
-        Whether the bot is in observe-only mode.
     logger : logging.Logger
         The logger to use for logging messages.
+    bot_conf : BotConfig
+        The bot configuration.
     trade_id : int
         The trade ID.
     df : pd.DataFrame or None
@@ -235,17 +230,17 @@ def log_event(
     None
 
     """
-    logger.info(f"columns used: {kernel_conf}")
+    logger.info(f"columns used: {bot_conf.kernel_conf}")
     logger.info(f"trade id: {trade_id}")
-    logger.info(f"run complete. {trade_conf.bot_id}")
+    logger.info(f"run complete. {bot_conf.trade_conf.bot_id}")
 
     # print the results
     if df is not None:
         report(
             df,
-            chart_conf.instrument,
-            kernel_conf,
-            length=10 if observe_only else 3,
+            bot_conf.chart_conf.instrument,
+            bot_conf.kernel_conf,
+            length=10 if bot_conf.observe_only else 3,
         )
 
 

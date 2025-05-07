@@ -8,7 +8,7 @@ import sys
 import yaml
 
 from bot.solve import PerfTimer, SolverConfig, ChartConfig, solve
-from bot.bot import TradeConfig, bot
+from bot.bot import BotConfig, OandaConfig, TradeConfig, bot
 from core.kernel import KernelConfig
 import os
 import cProfile
@@ -86,12 +86,13 @@ if __name__ == "__main__":
 
         # run
         bot(
-            token=TOKEN,
-            account_id=ACCOUNT_ID,
-            chart_conf=chart_conf,
-            kernel_conf=kernel_conf,
-            trade_conf=trade_conf,
-            observe_only=sys.argv[1] == "observe",
+            oanda_conf=OandaConfig(token=TOKEN, account_id=ACCOUNT_ID),
+            bot_conf=BotConfig(
+                chart_conf=chart_conf,
+                kernel_conf=kernel_conf,
+                trade_conf=trade_conf,
+                observe_only=sys.argv[1] == "observe",
+            ),
         )
     else:
         print(sys.argv)
