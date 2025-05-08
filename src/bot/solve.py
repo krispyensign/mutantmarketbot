@@ -159,7 +159,7 @@ def _solve_run(
     ask_column: NDArray[np.float64],
     atr: NDArray[np.float64],
     df: dict,
-) -> tuple[np.float64, np.int64, np.int64] | None:
+) -> (tuple[np.float64, np.float64, np.int64, np.int64, np.float64] | None):
     # run the backtest
     wma = df[f"wma_{kernel_conf.source_column}"]
     (
@@ -182,22 +182,24 @@ def _solve_run(
         kernel_conf.edge == EdgeCategory.Quasi,
     )
 
-    final_total, min_total, wins, losses = _stats(exit_value, exit_total)
-    if final_total <= 0.0 or final_total < abs(min_total):
-        return None
+    result = _stats(exit_value, exit_total)
 
-    return (final_total, wins, losses)
+    return result
 
 
 @jit(nopython=True)
 def _stats(
     exit_value: NDArray[Any], exit_total: NDArray[Any]
-) -> tuple[np.float64, np.float64, np.int64, np.int64]:
+) -> tuple[np.float64, np.float64, np.int64, np.int64, np.float64] | None:
     final_total = exit_total[-1] if exit_total[-1] > 0 else np.float64(0.0)
     min_total = exit_total.min()
+    if final_total <= 0.0 or final_total < abs(min_total):
+        return None
     wins: np.int64 = np.where(exit_value > 0, 1, 0).astype(np.int64).sum()
     losses: np.int64 = np.where(exit_value < 0, 1, 0).astype(np.int64).sum()
-    return final_total, min_total, wins, losses
+    ratio = np.float64(wins / (wins + losses))
+    
+    return final_total, min_total, wins, losses, ratio
 
 
 def solve(
@@ -272,8 +274,7 @@ def solve(
 
         # update best
         total_found += 1
-        et, wins, losses = result
-        ratio = wins / (wins + losses)
+        et, _, wins, losses, ratio = result
         if (
             best_result is None
             or (ratio >= best_result.ratio)
