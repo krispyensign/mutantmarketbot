@@ -37,9 +37,9 @@ if __name__ == "__main__":
     if "backtest" in sys.argv[1]:
         # load config
         conf = yaml.safe_load(open(sys.argv[2]))
-        chart_conf = ChartConfig(**conf["chart_config"])
-        kernel_conf = KernelConfig(**conf["kernel_config"])
-        backtest_conf = SolverConfig(**conf["backtest_config"])
+        chart_conf = ChartConfig(**conf["chart"])
+        kernel_conf = KernelConfig(**conf["kernel"])
+        solver_conf = SolverConfig(**conf["solver"])
 
         # setup logging
         logging_conf = conf["logging"]
@@ -52,7 +52,7 @@ if __name__ == "__main__":
 
         # run
         with PerfTimer(start_time, logger):
-            result = solve(chart_conf, kernel_conf, TOKEN, backtest_conf)
+            result = solve(chart_conf, kernel_conf, TOKEN, solver_conf)
         if result is None:
             sys.exit(1)
 
@@ -61,9 +61,11 @@ if __name__ == "__main__":
     elif sys.argv[1] in ["bot", "observe"]:
         # load config
         conf = yaml.safe_load(open(sys.argv[2]))
-        chart_conf = ChartConfig(**conf["chart_config"])
-        kernel_conf = KernelConfig(**conf["kernel_config"])
-        trade_conf = TradeConfig(**conf["trade_config"])
+
+        chart_conf = ChartConfig(**conf["chart"])
+        kernel_conf = KernelConfig(**conf["kernel"])
+        trade_conf = TradeConfig(**conf["trade"])
+        solver_conf = SolverConfig(source_columns=[], **conf["solver"])
 
         # setup logging
         logging_conf = conf["logging"]
@@ -77,6 +79,7 @@ if __name__ == "__main__":
                 chart_conf=chart_conf,
                 kernel_conf=kernel_conf,
                 trade_conf=trade_conf,
+                solver_conf=solver_conf,
                 observe_only=sys.argv[1] == "observe",
             ),
         )

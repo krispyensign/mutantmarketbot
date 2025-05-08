@@ -8,7 +8,7 @@ import uuid
 import v20  # type: ignore
 import pandas as pd
 
-from bot.solve import ChartConfig, PerfTimer, get_git_info, preprocess
+from bot.solve import ChartConfig, PerfTimer, SolverConfig, get_git_info, preprocess, solve
 from core.kernel import EdgeCategory, KernelConfig, kernel
 from bot.reporting import report
 from bot.exchange import (
@@ -120,6 +120,7 @@ class BotConfig:
     chart_conf: ChartConfig
     kernel_conf: KernelConfig
     trade_conf: TradeConfig
+    solver_conf: SolverConfig
     observe_only: bool
 
 
@@ -154,6 +155,15 @@ def bot(
     if git_info is None:
         logger.error("Failed to get Git info")
         return None
+
+    result = solve(
+        bot_conf.chart_conf,
+        bot_conf.kernel_conf,
+        oanda_conf.token,
+        bot_conf.solver_conf,
+    )
+    if result is not None:
+        bot_conf.kernel_conf = result.kernel_conf
 
     if not bot_conf.observe_only:
         sleep_until_next_5_minute(trade_id=-1)
@@ -199,9 +209,15 @@ def bot(
         if bot_conf.observe_only:
             break
 
-        if trade_id != -1 and bot_conf.kernel_conf.edge == EdgeCategory.Fast:
-            sleep(1)
-            continue
+        if trade_id == -1:
+            result = solve(
+                bot_conf.chart_conf,
+                bot_conf.kernel_conf,
+                oanda_conf.token,
+                bot_conf.solver_conf,
+            )
+            if result is not None:
+                bot_conf.kernel_conf = result.kernel_conf
 
         sleep_until_next_5_minute(trade_id=trade_id)
 

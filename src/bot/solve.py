@@ -108,6 +108,9 @@ class SolverConfig:
                 for tp in self.take_profit
                 for sl in self.stop_loss
             )
+            return gen, len(self.source_columns) ** 3 * len(self.take_profit) * len(
+                self.stop_loss
+            )
         else:
             gen = (
                 KernelConfig(
@@ -121,9 +124,7 @@ class SolverConfig:
                 for tp in self.take_profit
                 for sl in self.stop_loss
             )
-        return gen, len(self.source_columns) ** 3 * len(self.take_profit) * len(
-            self.stop_loss
-        )
+            return gen, len(self.take_profit) * len(self.stop_loss)
 
 
 @dataclass
