@@ -25,13 +25,16 @@ ACCOUNT_ID = os.environ.get("OANDA_ACCOUNT_ID")
 
 USAGE = """
     mutantmarketbot
+
       Usage: 
         python main.py solve <my_config>.yaml
         python main.py bot <my_config>.yaml
         python main.py backtest <my_config>.yaml
+
       ENV:
         OANDA_TOKEN=<token>
         OANDA_ACCOUNT_ID=<account_id>
+
       """
 
 
@@ -41,8 +44,10 @@ if __name__ == "__main__":
         print(sys.argv)
         print(USAGE)
         sys.exit(1)
-
-    if "solve" in sys.argv[1]:
+    if "help" or "--help" in sys.argv[1]:
+        print(USAGE)
+        sys.exit(0)
+    elif "solve" in sys.argv[1]:
         # load config
         conf = yaml.safe_load(open(sys.argv[2]))
         chart_conf = ChartConfig(**conf["chart"])
