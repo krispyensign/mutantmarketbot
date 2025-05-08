@@ -193,7 +193,8 @@ def _stats(
 ) -> tuple[np.float64, np.float64, np.int64, np.int64, np.float64] | None:
     final_total = exit_total[-1] if exit_total[-1] > 0 else np.float64(0.0)
     min_total = exit_total.min()
-    if final_total <= 0.0 or final_total < abs(min_total):
+    max_total = exit_total.max()
+    if final_total <= 0.0 or max_total < abs(min_total):
         return None
     wins: np.int64 = np.where(exit_value > 0, 1, 0).astype(np.int64).sum()
     losses: np.int64 = np.where(exit_value < 0, 1, 0).astype(np.int64).sum()

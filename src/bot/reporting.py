@@ -28,7 +28,7 @@ def report(
 
     """
     logger = logging.getLogger("reporting")
-    df_ticks = df.reset_index()[
+    df_ticks = df[
         [
             "signal",
             "trigger",
@@ -44,7 +44,7 @@ def report(
             "exit_total",
             "timestamp",
         ]
-    ]
+    ].copy()
     df_ticks["timestamp"] = pd.to_datetime(df_ticks["timestamp"])
     df_ticks["completed_datetime"] = (
         (timedelta(minutes=5) + df_ticks["timestamp"]).dt

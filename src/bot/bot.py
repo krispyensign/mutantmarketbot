@@ -3,7 +3,6 @@
 from datetime import datetime, timedelta
 import logging
 from time import sleep
-import v20  # type: ignore
 import pandas as pd
 
 from bot.common import (
@@ -11,7 +10,6 @@ from bot.common import (
     HALF_MINUTE,
     BotConfig,
     ChartConfig,
-    OandaConfig,
     PerfTimer,
     TradeConfig,
 )
@@ -122,7 +120,7 @@ def get_rec(kernel_conf: KernelConfig, trade_id: int, df: pd.DataFrame) -> pd.Se
 
 
 def bot(
-    oanda_conf: OandaConfig,
+    oanda_ctx: OandaContext,
     bot_conf: BotConfig,
 ) -> None:
     """Bot that trades on Oanda.
@@ -132,8 +130,8 @@ def bot(
 
     Parameters
     ----------
-    oanda_conf : OandaConfig
-        A dataclass containing the configuration for Oanda.
+    oanda_ctx : OandaContext
+        A dataclass containing the Oanda context.
     bot_conf : BotConfig
         A dataclass containing the configuration for the bot.
 
@@ -145,25 +143,19 @@ def bot(
         logger.error("failed to get git info: %s", git_info)
         return None
 
-    if not bot_conf.backtest_only:
-        result = solve(
-            bot_conf.chart_conf,
-            bot_conf.kernel_conf,
-            oanda_conf.token,
-            bot_conf.solver_conf,
-        )
-        if result is not None:
-            bot_conf.kernel_conf = result.kernel_conf
-
-        sleep_until_next_5_minute(trade_id=-1)
-
-    # create Oanda context
-    ctx = OandaContext(
-        ctx=v20.Context("api-fxpractice.oanda.com", token=oanda_conf.token),
-        account_id=oanda_conf.account_id,
-        token=oanda_conf.token,
-        instrument=bot_conf.chart_conf.instrument,
+    solver_result = solve(
+        bot_conf.chart_conf,
+        bot_conf.kernel_conf,
+        oanda_ctx.token,
+        bot_conf.solver_conf,
     )
+    if solver_result is None:
+        logger.error("failed to solve.")
+        return None
+    sconf: KernelConfig = solver_result.kernel_conf
+
+    if not bot_conf.backtest_only:
+        sleep_until_next_5_minute(trade_id=-1)
 
     # run bot
     trade_id: int = -1
@@ -172,8 +164,8 @@ def bot(
     while True:
         with PerfTimer(APP_START_TIME, logger):
             trade_id, df, err = bot_run(
-                ctx,
-                bot_conf.kernel_conf,
+                oanda_ctx,
+                sconf,
                 chart_conf=bot_conf.chart_conf,
                 trade_conf=bot_conf.trade_conf,
                 backtest_only=bot_conf.backtest_only,
@@ -183,26 +175,29 @@ def bot(
             sleep(2)
             continue
 
-        log_event(logger, bot_conf, trade_id, df, git_info)
-        if bot_conf.backtest_only:
-            break
+        log_event(bot_conf, sconf, trade_id, df, git_info)
 
         if trade_id == -1:
-            result = solve(
+            solver_result = solve(
                 bot_conf.chart_conf,
                 bot_conf.kernel_conf,
-                oanda_conf.token,
+                oanda_ctx.token,
                 bot_conf.solver_conf,
             )
-            if result is not None:
-                bot_conf.kernel_conf = result.kernel_conf
+            if solver_result is None:
+                logger.error("failed to solve.")
+                return None
+            sconf = solver_result.kernel_conf
+
+        if bot_conf.backtest_only:
+            break
 
         sleep_until_next_5_minute(trade_id=trade_id)
 
 
 def log_event(
-    logger: logging.Logger,
     bot_conf: BotConfig,
+    kernel_conf: KernelConfig,
     trade_id: int,
     df: pd.DataFrame | None,
     git_info: tuple[str, bool],
@@ -215,6 +210,8 @@ def log_event(
         The logger to use for logging messages.
     bot_conf : BotConfig
         The bot configuration.
+    kernel_conf : KernelConfig
+        The kernel configuration.
     trade_id : int
         The trade ID.
     df : pd.DataFrame or None
@@ -227,6 +224,7 @@ def log_event(
     None
 
     """
+    logger = logging.getLogger("bot")
     logger.info(f"git commit: {git_info[0]}, porcelain: {git_info[1]}")
     logger.info(f"columns used: {bot_conf.kernel_conf}")
     logger.info(f"trade id: {trade_id}")
@@ -243,7 +241,7 @@ def log_event(
         report(
             df,
             bot_conf.chart_conf.instrument,
-            bot_conf.kernel_conf,
+            kernel_conf,
             length=10 if bot_conf.backtest_only else 3,
         )
 

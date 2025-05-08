@@ -5,6 +5,7 @@ import logging
 import logging.config
 import sys
 
+import v20  # type: ignore
 import yaml
 
 from bot.common import (
@@ -19,6 +20,7 @@ from bot.solve import solve
 from bot.bot import bot
 from core.kernel import KernelConfig
 import os
+from bot.exchange import OandaContext
 
 TOKEN = os.environ.get("OANDA_TOKEN")
 ACCOUNT_ID = os.environ.get("OANDA_ACCOUNT_ID")
@@ -53,11 +55,23 @@ if __name__ == "__main__":
         chart_conf = ChartConfig(**conf["chart"])
         kernel_conf = KernelConfig(**conf["kernel"])
         solver_conf = SolverConfig(**conf["solver"])
+        oanda_conf = OandaConfig(
+            token=TOKEN,
+            account_id=ACCOUNT_ID,
+        )
 
         # setup logging
         logging_conf = conf["logging"]
         logging.config.dictConfig(logging_conf)
         logger = logging.getLogger("main")
+
+        # create Oanda context
+        ctx = OandaContext(
+            ctx=v20.Context("api-fxpractice.oanda.com", token=oanda_conf.token),
+            account_id=oanda_conf.account_id,
+            token=oanda_conf.token,
+            instrument=chart_conf.instrument,
+        )
 
         # configure take profit and stop loss
         tp = conf["take_profit"] if "take_profit" in conf else [0.0]
@@ -78,16 +92,23 @@ if __name__ == "__main__":
         chart_conf = ChartConfig(**conf["chart"])
         kernel_conf = KernelConfig(**conf["kernel"])
         trade_conf = TradeConfig(**conf["trade"])
-        solver_conf = SolverConfig(source_columns=[], **conf["solver"])
+        solver_conf = SolverConfig(**conf["solver"])
 
         # setup logging
         logging_conf = conf["logging"]
         logging.config.dictConfig(logging_conf)
         logger = logging.getLogger("main")
 
+        # create Oanda context
+        ctx = OandaContext(
+            ctx=v20.Context("api-fxpractice.oanda.com", token=TOKEN),
+            account_id=ACCOUNT_ID,
+            token=TOKEN,
+            instrument=chart_conf.instrument,
+        )
         # run
         bot(
-            oanda_conf=OandaConfig(token=TOKEN, account_id=ACCOUNT_ID),
+            oanda_ctx=ctx,
             bot_conf=BotConfig(
                 chart_conf=chart_conf,
                 kernel_conf=kernel_conf,
