@@ -44,7 +44,7 @@ if __name__ == "__main__":
         print(sys.argv)
         print(USAGE)
         sys.exit(1)
-    if "help" or "--help" in sys.argv[1]:
+    if "help" in sys.argv[1] or "--help" in sys.argv[1]:
         print(USAGE)
         sys.exit(0)
     elif "solve" in sys.argv[1]:
