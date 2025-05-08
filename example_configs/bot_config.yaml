@@ -1,19 +1,77 @@
-trade_config:
+trade:
   amount: 1000
-  bot_id: 331406a1-8ddd-415e-acd2-1474985d6fe1
+  bot_id: 4de61e31-f865-4267-bd43-536b5565a426
 
-chart_config:
-  instrument: USD_CHF
+chart:
+  instrument: EUR_USD
   granularity: M5
   candle_count: 288
 
-kernel_config:
-  source_column: bid_open
-  signal_buy_column: ask_close
-  signal_exit_column: bid_open
+kernel:
   wma_period: 20
-  stop_loss: 0.0
-  take_profit: 0.0
+
+solver:
+  source_columns:
+    - open
+    - low
+    - close
+    - high
+    - bid_open
+    - bid_low
+    - bid_close
+    - bid_high
+    - ask_open
+    - ask_low
+    - ask_close
+    - ask_high
+    - ha_open
+    - ha_low
+    - ha_close
+    - ha_high
+    - ha_bid_open
+    - ha_bid_low
+    - ha_bid_close
+    - ha_bid_high
+    - ha_ask_open
+    - ha_ask_low
+    - ha_ask_close
+    - ha_ask_high
+
+  take_profit:
+    - 0.0
+    - 0.1
+    - 0.2
+    - 0.3
+    - 0.4
+    - 0.5
+    - 0.6
+    - 0.7
+    - 0.8
+    - 0.9
+    - 1.0
+    - 2.0
+    - 3.0
+    - 4.0
+    - 5.0
+    - 6.0
+    - 7.0
+    - 8.0
+
+  stop_loss:
+    - 0.1
+    - 0.2
+    - 0.3
+    - 0.4
+    - 0.5
+    - 0.6
+    - 0.7
+    - 0.8
+    - 0.9
+    - 1.0
+    - 2.0
+    - 3.0
+    - 4.0
+    - 5.0
 
 logging:
   version: 1
@@ -32,12 +90,12 @@ logging:
       class: logging.FileHandler
       level: DEBUG
       formatter: simple
-      filename: logs/mmbot-USD_CHF-331406a1.log
+      filename: logs/mmbot-EUR_USD-4de61e31.log
     ecs_file:
       class: logging.FileHandler
       level: DEBUG
       formatter: ecs
-      filename: logs/mmbot-EUR_USD-331406a1-ecs.json
+      filename: logs/mmbot-EUR_USD-4de61e31-ecs.json
   loggers:
     numba:
       level: WARNING

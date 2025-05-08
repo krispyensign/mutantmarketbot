@@ -226,7 +226,7 @@ def log_event(
     """
     logger = logging.getLogger("bot")
     logger.info(f"git commit: {git_info[0]}, porcelain: {git_info[1]}")
-    logger.info(f"columns used: {bot_conf.kernel_conf}")
+    logger.info(f"columns used: {kernel_conf}")
     logger.info(f"trade id: {trade_id}")
     logger.info(f"run complete. {bot_conf.trade_conf.bot_id}")
 
