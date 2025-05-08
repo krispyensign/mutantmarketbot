@@ -46,9 +46,7 @@ def get_git_info() -> tuple[str, bool] | Exception:
         return e
 
 
-def preprocess(
-    df: pd.DataFrame, wma_period: int, convert: bool
-) -> dict[str, NDArray] | pd.DataFrame:
+def preprocess(df: pd.DataFrame, wma_period: int) -> pd.DataFrame:
     # calculate the ATR for the trailing stop loss
     """Preprocess the DataFrame to calculate various technical indicators.
 
@@ -145,11 +143,6 @@ def preprocess(
     df["wma_ha_ask_close"] = talib.WMA(
         df["ha_ask_close"].to_numpy(), timeperiod=wma_period
     )
-
-    if convert:
-        result_dict = _convert_to_dict(df)
-
-        return result_dict
 
     return df
 
@@ -248,9 +241,9 @@ def solve(
     logger.info("git info: %s %s", git_info[0], git_info[1])
 
     # get data and preprocess
-    orig_df: pd.DataFrame = preprocess(
-        _get_data(chart_config, token, logger), kernel_conf_in.wma_period, False
-    )  # type: ignore
+    orig_df = preprocess(
+        _get_data(chart_config, token, logger), kernel_conf_in.wma_period
+    )
 
     # convert to dict for speed
     df = _convert_to_dict(orig_df)

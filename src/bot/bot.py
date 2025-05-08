@@ -41,13 +41,12 @@ def bot_run(
         df = getOandaOHLC(
             ctx, count=chart_conf.candle_count, granularity=chart_conf.granularity
         )
-        df: pd.DataFrame = preprocess(df, kernel_conf.wma_period, False)  # type: ignore
+        df = preprocess(df, kernel_conf.wma_period)
     except Exception as err:
         return -1, None, err
 
     # run kernel on candles
     recent_last_time = datetime.fromisoformat(df.iloc[-1]["timestamp"])
-    df["wma"] = df[f"wma_{kernel_conf.source_column}"]
     df = kernel(df, config=kernel_conf)
 
     # observe only and do not trade
@@ -86,14 +85,30 @@ def bot_run(
     return trade_id, df, None
 
 
-def get_is_strict(kernel_conf, trade_id):
+def get_is_strict(kernel_conf: KernelConfig, trade_id: int) -> bool:
     """Get the strictness of the bot."""
     is_strict = not (kernel_conf.edge == EdgeCategory.Latest and trade_id != -1)
     return is_strict
 
 
-def get_rec(kernel_conf, trade_id, df):
-    """Get the last valid record of the DataFrame."""
+def get_rec(kernel_conf: KernelConfig, trade_id: int, df: pd.DataFrame) -> pd.Series:
+    """Get the last valid record of the DataFrame.
+
+    Parameters
+    ----------
+    kernel_conf : KernelConfig
+        The kernel configuration.
+    trade_id : int
+        The trade ID.
+    df : pd.DataFrame
+        The DataFrame containing the trading data.
+
+    Returns
+    -------
+    pd.Series
+        The last valid record of the DataFrame.
+
+    """
     if kernel_conf.edge == EdgeCategory.Latest:
         rec = df.iloc[-1]
     elif kernel_conf.edge in [EdgeCategory.Fast, EdgeCategory.Quasi]:
@@ -233,12 +248,24 @@ def log_event(
         )
 
 
-def roundUp(dt):
-    """Round a datetime object to the next 5 minute interval."""
+def roundUp(dt: datetime) -> datetime:
+    """Round a datetime object to the next 5 minute interval.
+
+    Parameters
+    ----------
+    dt : datetime
+        The datetime object to round.
+
+    Returns
+    -------
+    datetime
+        The rounded datetime object.
+
+    """
     return (dt + timedelta(minutes=5 - dt.minute % 5)).replace(second=1, microsecond=0)
 
 
-def sleep_until_next_5_minute(trade_id: int = -1):
+def sleep_until_next_5_minute(trade_id: int = -1) -> None:
     """Sleep until the next 5 minute interval."""
     now = datetime.now()
     next_time = roundUp(now)
