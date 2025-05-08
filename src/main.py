@@ -26,9 +26,9 @@ ACCOUNT_ID = os.environ.get("OANDA_ACCOUNT_ID")
 USAGE = """
     mutantmarketbot
       Usage: 
-        python main.py backtest <my_config>.yaml
+        python main.py solve <my_config>.yaml
         python main.py bot <my_config>.yaml
-        python main.py observe <my_config>.yaml
+        python main.py backtest <my_config>.yaml
       ENV:
         OANDA_TOKEN=<token>
         OANDA_ACCOUNT_ID=<account_id>
@@ -42,7 +42,7 @@ if __name__ == "__main__":
         print(USAGE)
         sys.exit(1)
 
-    if "backtest" in sys.argv[1]:
+    if "solve" in sys.argv[1]:
         # load config
         conf = yaml.safe_load(open(sys.argv[2]))
         chart_conf = ChartConfig(**conf["chart"])
@@ -66,7 +66,7 @@ if __name__ == "__main__":
 
         logger.info("%s", result)
 
-    elif sys.argv[1] in ["bot", "observe"]:
+    elif sys.argv[1] in ["bot", "backtest"]:
         # load config
         conf = yaml.safe_load(open(sys.argv[2]))
 
@@ -88,7 +88,7 @@ if __name__ == "__main__":
                 kernel_conf=kernel_conf,
                 trade_conf=trade_conf,
                 solver_conf=solver_conf,
-                observe_only=sys.argv[1] == "observe",
+                backtest_only=sys.argv[1] == "backtest",
             ),
         )
     else:

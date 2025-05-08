@@ -32,7 +32,7 @@ def bot_run(
     kernel_conf: KernelConfig,
     chart_conf: ChartConfig,
     trade_conf: TradeConfig,
-    observe_only: bool = False,
+    backtest_only: bool = False,
 ) -> tuple[int, pd.DataFrame | None, Exception | None]:
     """Run the bot."""
     # get open trades and candles
@@ -49,8 +49,8 @@ def bot_run(
     recent_last_time = datetime.fromisoformat(df.iloc[-1]["timestamp"])
     df = kernel(df, config=kernel_conf)
 
-    # observe only and do not trade
-    if observe_only:
+    # backtest only and do not trade
+    if backtest_only:
         return trade_id, df, None
 
     # check if the current time is greater than the recent last time
@@ -145,7 +145,7 @@ def bot(
         logger.error("failed to get git info: %s", git_info)
         return None
 
-    if not bot_conf.observe_only:
+    if not bot_conf.backtest_only:
         result = solve(
             bot_conf.chart_conf,
             bot_conf.kernel_conf,
@@ -176,7 +176,7 @@ def bot(
                 bot_conf.kernel_conf,
                 chart_conf=bot_conf.chart_conf,
                 trade_conf=bot_conf.trade_conf,
-                observe_only=bot_conf.observe_only,
+                backtest_only=bot_conf.backtest_only,
             )
         if err is not None:
             logger.error(err)
@@ -184,7 +184,7 @@ def bot(
             continue
 
         log_event(logger, bot_conf, trade_id, df, git_info)
-        if bot_conf.observe_only:
+        if bot_conf.backtest_only:
             break
 
         if trade_id == -1:
@@ -244,7 +244,7 @@ def log_event(
             df,
             bot_conf.chart_conf.instrument,
             bot_conf.kernel_conf,
-            length=10 if bot_conf.observe_only else 3,
+            length=10 if bot_conf.backtest_only else 3,
         )
 
 

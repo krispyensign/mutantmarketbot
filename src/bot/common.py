@@ -111,7 +111,7 @@ class BotConfig:
     kernel_conf: KernelConfig
     trade_conf: TradeConfig
     solver_conf: SolverConfig
-    observe_only: bool
+    backtest_only: bool
 
 
 @dataclass
