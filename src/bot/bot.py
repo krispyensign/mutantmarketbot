@@ -152,20 +152,20 @@ def bot(
     logger = logging.getLogger("bot")
     logger.info("starting bot.")
     git_info = get_git_info()
-    if git_info is None:
-        logger.error("Failed to get Git info")
+    if type(git_info) is not tuple:
+        logger.error("failed to get git info: %s", git_info)
         return None
 
-    result = solve(
-        bot_conf.chart_conf,
-        bot_conf.kernel_conf,
-        oanda_conf.token,
-        bot_conf.solver_conf,
-    )
-    if result is not None:
-        bot_conf.kernel_conf = result.kernel_conf
-
     if not bot_conf.observe_only:
+        result = solve(
+            bot_conf.chart_conf,
+            bot_conf.kernel_conf,
+            oanda_conf.token,
+            bot_conf.solver_conf,
+        )
+        if result is not None:
+            bot_conf.kernel_conf = result.kernel_conf
+
         sleep_until_next_5_minute(trade_id=-1)
 
     # create Oanda context
@@ -194,18 +194,7 @@ def bot(
             sleep(2)
             continue
 
-        if df is not None:
-            min_exit_value = round(df["exit_value"].min(), 5)
-            max_exit_value = round(df["exit_value"].max(), 5)
-            wins = (df["exit_value"] > 0).astype(int).cumsum()
-            losses = (df["exit_value"] < 0).astype(int).cumsum()
-            logger.info(
-                f"w: {wins.iloc[-1]} l: {losses.iloc[-1]} min: {min_exit_value} max: {max_exit_value}"
-            )
-
-        logger.info(f"git commit: {git_info[0]}, porcelain: {git_info[1]}")
-        log_event(logger, bot_conf, trade_id, df)
-
+        log_event(logger, bot_conf, trade_id, df, git_info)
         if bot_conf.observe_only:
             break
 
@@ -227,6 +216,7 @@ def log_event(
     bot_conf: BotConfig,
     trade_id: int,
     df: pd.DataFrame | None,
+    git_info: tuple[str, bool],
 ) -> None:
     """Log event details and report trading results.
 
@@ -240,18 +230,27 @@ def log_event(
         The trade ID.
     df : pd.DataFrame or None
         The DataFrame containing the trading data, or None if not available.
+    git_info : tuple[str, bool]
+        The Git information.
 
     Returns
     -------
     None
 
     """
+    logger.info(f"git commit: {git_info[0]}, porcelain: {git_info[1]}")
     logger.info(f"columns used: {bot_conf.kernel_conf}")
     logger.info(f"trade id: {trade_id}")
     logger.info(f"run complete. {bot_conf.trade_conf.bot_id}")
 
-    # print the results
     if df is not None:
+        min_exit_value = round(df["exit_value"].min(), 5)
+        max_exit_value = round(df["exit_value"].max(), 5)
+        wins = (df["exit_value"] > 0).astype(int).cumsum()
+        losses = (df["exit_value"] < 0).astype(int).cumsum()
+        logger.info(
+            f"w: {wins.iloc[-1]} l: {losses.iloc[-1]} min: {min_exit_value} max: {max_exit_value}"
+        )
         report(
             df,
             bot_conf.chart_conf.instrument,

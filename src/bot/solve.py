@@ -23,7 +23,7 @@ import logging
 APP_START_TIME = datetime.now()
 
 
-def get_git_info() -> tuple[str, bool, Exception | None]:
+def get_git_info() -> tuple[str, bool] | Exception:
     """Get commit hash and whether the working tree is clean.
 
     Returns a tuple (str, bool). The first element is the commit hash. The second
@@ -43,9 +43,9 @@ def get_git_info() -> tuple[str, bool, Exception | None]:
             ["git", "status", "--porcelain"], encoding="utf-8"
         ).strip()
 
-        return commit_hash, porcelain_status == "", None
+        return commit_hash, porcelain_status == ""
     except subprocess.CalledProcessError as e:
-        return "", False, e
+        return e
 
 
 class PerfTimer:
@@ -343,12 +343,12 @@ def solve(
     """
     logger = logging.getLogger("backtest")
     logger.info("starting backtest")
-    commit, porcelain, err = get_git_info()
-    if err is not None:
-        logger.error("failed to get git info: %s", err)
+    git_info = get_git_info()
+    if type(git_info) is not tuple:
+        logger.error("failed to get git info: %s", git_info)
         return None
 
-    logger.info("git info: %s %s", commit, porcelain)
+    logger.info("git info: %s %s", git_info[0], git_info[1])
 
     # get data and preprocess
     orig_df: pd.DataFrame = preprocess(
