@@ -152,6 +152,8 @@ def bot(
     if solver_result is None:
         logger.error("failed to solve.")
         return None
+    else:
+        logger.info("selected %s", solver_result.kernel_conf)
     sconf: KernelConfig = solver_result.kernel_conf
 
     if not bot_conf.backtest_only:
@@ -187,6 +189,8 @@ def bot(
             if solver_result is None:
                 logger.error("failed to solve.")
                 return None
+            else:
+                logger.info("selected %s", solver_result.kernel_conf)
             sconf = solver_result.kernel_conf
 
         if bot_conf.backtest_only:

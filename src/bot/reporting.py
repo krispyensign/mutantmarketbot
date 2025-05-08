@@ -61,8 +61,8 @@ def report(
         .round(round_amount)
         .to_string(index=False, header=True, justify="left")
     )
-    logger.debug("current status")
-    logger.debug(
+    logger.info("current status")
+    logger.info(
         "\n"
         + df_ticks.tail(length)
         .round(round_amount)

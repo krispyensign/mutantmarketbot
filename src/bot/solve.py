@@ -314,7 +314,7 @@ def _log_progress(
         time_diff = time_now - start_time
         throughput = count / time_diff.total_seconds()
         remaining = timedelta(seconds=(column_pair_len - count) / throughput)
-        logger.info(
+        logger.debug(
             "heartbeat: %s %s%% %s/%s %s/s %s remaining",
             total_found,
             round(100 * count / column_pair_len, 2),
