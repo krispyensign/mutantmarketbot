@@ -7,8 +7,9 @@ import sys
 
 import yaml
 
-from bot.solve import PerfTimer, SolverConfig, ChartConfig, solve
-from bot.bot import BotConfig, OandaConfig, TradeConfig, bot
+from bot.common import BotConfig, ChartConfig, OandaConfig, PerfTimer, SolverConfig, TradeConfig
+from bot.solve import solve
+from bot.bot import bot
 from core.kernel import KernelConfig
 import os
 
