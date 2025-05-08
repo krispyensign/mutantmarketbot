@@ -1,16 +1,12 @@
-trade:
-  amount: 1000
-  bot_id: 4de61e31-f865-4267-bd43-536b5565a426
-
-chart:
-  instrument: EUR_USD
+chart_config:
   granularity: M5
   candle_count: 288
+  instrument: USD_CHF
 
-kernel:
+kernel_config:
   wma_period: 20
 
-solver:
+backtest_config:
   source_columns:
     - open
     - low
@@ -58,15 +54,12 @@ solver:
     - 8.0
 
   stop_loss:
+    - 0.0
     - 0.1
     - 0.2
     - 0.3
     - 0.4
     - 0.5
-    - 0.6
-    - 0.7
-    - 0.8
-    - 0.9
     - 1.0
     - 2.0
     - 3.0
@@ -78,8 +71,6 @@ logging:
   formatters:
     simple:
       format: '%(asctime)s|%(name)s|%(levelname)s|%(message)s'
-    ecs:
-      (): ecs_logging.StdlibFormatter
   handlers:
     console:
       class: logging.StreamHandler
@@ -90,15 +81,10 @@ logging:
       class: logging.FileHandler
       level: DEBUG
       formatter: simple
-      filename: logs/mmbot-EUR_USD-4de61e31.log
-    ecs_file:
-      class: logging.FileHandler
-      level: DEBUG
-      formatter: ecs
-      filename: logs/mmbot-EUR_USD-4de61e31-ecs.json
+      filename: logs/mmbot-USD_CHF-backtest.log
   loggers:
     numba:
       level: WARNING
   root:
     level: DEBUG
-    handlers: [console, file, ecs_file]
+    handlers: [console, file]
