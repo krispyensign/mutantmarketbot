@@ -259,6 +259,7 @@ def kernel(
 
     """
     # calculate the entry and exit signals
+    df["wma"] = df[f"wma_{config.source_column}"]
     (
         df["signal"],
         df["trigger"],

@@ -28,7 +28,7 @@ def report(
 
     """
     logger = logging.getLogger("reporting")
-    df_ticks = df.reset_index()[
+    df_ticks = df[
         [
             "signal",
             "trigger",
@@ -44,11 +44,13 @@ def report(
             "exit_total",
             "timestamp",
         ]
-    ]
+    ].copy()
     df_ticks["timestamp"] = pd.to_datetime(df_ticks["timestamp"])
     df_ticks["completed_datetime"] = (
         (timedelta(minutes=5) + df_ticks["timestamp"]).dt
     ).strftime("%Y-%m-%d %H:%M:%S")
+    # recent_ticks = df_ticks.where(df_ticks["timestamp"] > APP_START_TIME)
+    # logger.info("total %s", recent_ticks["exit_value"].sum())
     df_orders = df_ticks.copy()
     df_orders = df_orders[df_orders["trigger"] != 0]
     round_amount = 3 if "JPY" in instrument else 5
@@ -59,8 +61,8 @@ def report(
         .round(round_amount)
         .to_string(index=False, header=True, justify="left")
     )
-    logger.debug("current status")
-    logger.debug(
+    logger.info("current status")
+    logger.info(
         "\n"
         + df_ticks.tail(length)
         .round(round_amount)

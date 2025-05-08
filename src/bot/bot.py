@@ -1,14 +1,19 @@
 """Bot that trades on Oanda."""
 
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 import logging
 from time import sleep
-import uuid
-import v20  # type: ignore
 import pandas as pd
 
-from bot.solve import ChartConfig, PerfTimer, get_git_info, preprocess
+from bot.common import (
+    APP_START_TIME,
+    HALF_MINUTE,
+    BotConfig,
+    ChartConfig,
+    PerfTimer,
+    TradeConfig,
+)
+from bot.solve import get_git_info, preprocess, solve
 from core.kernel import EdgeCategory, KernelConfig, kernel
 from bot.reporting import report
 from bot.exchange import (
@@ -19,27 +24,13 @@ from bot.exchange import (
     OandaContext,
 )
 
-APP_START_TIME = datetime.now()
-FRIDAY = 5
-SUNDAY = 7
-FIVE_PM = 21
-HALF_MINUTE = 30
-
-
-@dataclass
-class TradeConfig:
-    """Configuration for the bot."""
-
-    amount: float
-    bot_id: uuid.UUID
-
 
 def bot_run(
     ctx: OandaContext,
     kernel_conf: KernelConfig,
     chart_conf: ChartConfig,
     trade_conf: TradeConfig,
-    observe_only: bool = False,
+    backtest_only: bool = False,
 ) -> tuple[int, pd.DataFrame | None, Exception | None]:
     """Run the bot."""
     # get open trades and candles
@@ -48,17 +39,16 @@ def bot_run(
         df = getOandaOHLC(
             ctx, count=chart_conf.candle_count, granularity=chart_conf.granularity
         )
-        df: pd.DataFrame = preprocess(df, kernel_conf.wma_period, False)  # type: ignore
+        df = preprocess(df, kernel_conf.wma_period)
     except Exception as err:
         return -1, None, err
 
     # run kernel on candles
     recent_last_time = datetime.fromisoformat(df.iloc[-1]["timestamp"])
-    df["wma"] = df[f"wma_{kernel_conf.source_column}"]
     df = kernel(df, config=kernel_conf)
 
-    # observe only and do not trade
-    if observe_only:
+    # backtest only and do not trade
+    if backtest_only:
         return trade_id, df, None
 
     # check if the current time is greater than the recent last time
@@ -93,14 +83,30 @@ def bot_run(
     return trade_id, df, None
 
 
-def get_is_strict(kernel_conf, trade_id):
+def get_is_strict(kernel_conf: KernelConfig, trade_id: int) -> bool:
     """Get the strictness of the bot."""
     is_strict = not (kernel_conf.edge == EdgeCategory.Latest and trade_id != -1)
     return is_strict
 
 
-def get_rec(kernel_conf, trade_id, df):
-    """Get the last valid record of the DataFrame."""
+def get_rec(kernel_conf: KernelConfig, trade_id: int, df: pd.DataFrame) -> pd.Series:
+    """Get the last valid record of the DataFrame.
+
+    Parameters
+    ----------
+    kernel_conf : KernelConfig
+        The kernel configuration.
+    trade_id : int
+        The trade ID.
+    df : pd.DataFrame
+        The DataFrame containing the trading data.
+
+    Returns
+    -------
+    pd.Series
+        The last valid record of the DataFrame.
+
+    """
     if kernel_conf.edge == EdgeCategory.Latest:
         rec = df.iloc[-1]
     elif kernel_conf.edge in [EdgeCategory.Fast, EdgeCategory.Quasi]:
@@ -114,12 +120,8 @@ def get_rec(kernel_conf, trade_id, df):
 
 
 def bot(
-    token: str,
-    account_id: str,
-    chart_conf: ChartConfig,
-    kernel_conf: KernelConfig,
-    trade_conf: TradeConfig,
-    observe_only: bool,
+    oanda_ctx: OandaContext,
+    bot_conf: BotConfig,
 ) -> None:
     """Bot that trades on Oanda.
 
@@ -128,37 +130,34 @@ def bot(
 
     Parameters
     ----------
-    token : str
-        The Oanda API token.
-    account_id : str
-        The Oanda account ID.
-    chart_conf : ChartConfig
-        The chart configuration.
-    kernel_conf : KernelConfig
-        The kernel configuration.
-    trade_conf : TradeConfig
-        The trade configuration.
-    observe_only : bool, optional
-        Whether to observe only. The default is False.
+    oanda_ctx : OandaContext
+        A dataclass containing the Oanda context.
+    bot_conf : BotConfig
+        A dataclass containing the configuration for the bot.
 
     """
     logger = logging.getLogger("bot")
     logger.info("starting bot.")
     git_info = get_git_info()
-    if git_info is None:
-        logger.error("Failed to get Git info")
+    if type(git_info) is not tuple:
+        logger.error("failed to get git info: %s", git_info)
         return None
 
-    if not observe_only:
-        sleep_until_next_5_minute(trade_id=-1)
-
-    # create Oanda context
-    ctx = OandaContext(
-        ctx=v20.Context("api-fxpractice.oanda.com", token=token),
-        account_id=account_id,
-        token=token,
-        instrument=chart_conf.instrument,
+    solver_result = solve(
+        bot_conf.chart_conf,
+        bot_conf.kernel_conf,
+        oanda_ctx.token,
+        bot_conf.solver_conf,
     )
+    if solver_result is None:
+        logger.error("failed to solve.")
+        return None
+    else:
+        logger.info("selected %s", solver_result.kernel_conf)
+    sconf: KernelConfig = solver_result.kernel_conf
+
+    if not bot_conf.backtest_only:
+        sleep_until_next_5_minute(trade_id=-1)
 
     # run bot
     trade_id: int = -1
@@ -167,94 +166,108 @@ def bot(
     while True:
         with PerfTimer(APP_START_TIME, logger):
             trade_id, df, err = bot_run(
-                ctx,
-                kernel_conf,
-                chart_conf=chart_conf,
-                trade_conf=trade_conf,
-                observe_only=observe_only,
+                oanda_ctx,
+                sconf,
+                chart_conf=bot_conf.chart_conf,
+                trade_conf=bot_conf.trade_conf,
+                backtest_only=bot_conf.backtest_only,
             )
         if err is not None:
             logger.error(err)
             sleep(2)
             continue
 
-        if df is not None:
-            min_exit_value = round(df["exit_value"].min(), 5)
-            max_exit_value = round(df["exit_value"].max(), 5)
-            wins = (df["exit_value"] > 0).astype(int).cumsum()
-            losses = (df["exit_value"] < 0).astype(int).cumsum()
-            logger.info(
-                f"w: {wins.iloc[-1]} l: {losses.iloc[-1]} min: {min_exit_value} max: {max_exit_value}"
+        log_event(bot_conf, sconf, trade_id, df, git_info)
+
+        if trade_id == -1:
+            solver_result = solve(
+                bot_conf.chart_conf,
+                bot_conf.kernel_conf,
+                oanda_ctx.token,
+                bot_conf.solver_conf,
             )
+            if solver_result is None:
+                logger.error("failed to solve.")
+                return None
+            else:
+                logger.info("selected %s", solver_result.kernel_conf)
+            sconf = solver_result.kernel_conf
 
-        logger.info(f"git commit: {git_info[0]}, porcelain: {git_info[1]}")
-        log_event(
-            chart_conf, kernel_conf, trade_conf, observe_only, logger, trade_id, df
-        )
-
-        if observe_only:
+        if bot_conf.backtest_only:
             break
-
-        if trade_id != -1 and kernel_conf.edge == EdgeCategory.Fast:
-            sleep(1)
-            continue
 
         sleep_until_next_5_minute(trade_id=trade_id)
 
 
 def log_event(
-    chart_conf: ChartConfig,
+    bot_conf: BotConfig,
     kernel_conf: KernelConfig,
-    trade_conf: TradeConfig,
-    observe_only: bool,
-    logger: logging.Logger,
     trade_id: int,
     df: pd.DataFrame | None,
+    git_info: tuple[str, bool],
 ) -> None:
     """Log event details and report trading results.
 
     Parameters
     ----------
-    chart_conf : ChartConfig
-        The chart configuration.
-    kernel_conf : KernelConfig
-        The kernel configuration.
-    trade_conf : TradeConfig
-        The trade configuration.
-    observe_only : bool
-        Whether the bot is in observe-only mode.
     logger : logging.Logger
         The logger to use for logging messages.
+    bot_conf : BotConfig
+        The bot configuration.
+    kernel_conf : KernelConfig
+        The kernel configuration.
     trade_id : int
         The trade ID.
     df : pd.DataFrame or None
         The DataFrame containing the trading data, or None if not available.
+    git_info : tuple[str, bool]
+        The Git information.
 
     Returns
     -------
     None
 
     """
+    logger = logging.getLogger("bot")
+    logger.info(f"git commit: {git_info[0]}, porcelain: {git_info[1]}")
     logger.info(f"columns used: {kernel_conf}")
     logger.info(f"trade id: {trade_id}")
-    logger.info(f"run complete. {trade_conf.bot_id}")
+    logger.info(f"run complete. {bot_conf.trade_conf.bot_id}")
 
-    # print the results
     if df is not None:
+        min_exit_value = round(df["exit_value"].min(), 5)
+        max_exit_value = round(df["exit_value"].max(), 5)
+        wins = (df["exit_value"] > 0).astype(int).cumsum()
+        losses = (df["exit_value"] < 0).astype(int).cumsum()
+        logger.info(
+            f"w: {wins.iloc[-1]} l: {losses.iloc[-1]} min: {min_exit_value} max: {max_exit_value}"
+        )
         report(
             df,
-            chart_conf.instrument,
+            bot_conf.chart_conf.instrument,
             kernel_conf,
-            length=10 if observe_only else 3,
+            length=10 if bot_conf.backtest_only else 3,
         )
 
 
-def roundUp(dt):
-    """Round a datetime object to the next 5 minute interval."""
+def roundUp(dt: datetime) -> datetime:
+    """Round a datetime object to the next 5 minute interval.
+
+    Parameters
+    ----------
+    dt : datetime
+        The datetime object to round.
+
+    Returns
+    -------
+    datetime
+        The rounded datetime object.
+
+    """
     return (dt + timedelta(minutes=5 - dt.minute % 5)).replace(second=1, microsecond=0)
 
 
-def sleep_until_next_5_minute(trade_id: int = -1):
+def sleep_until_next_5_minute(trade_id: int = -1) -> None:
     """Sleep until the next 5 minute interval."""
     now = datetime.now()
     next_time = roundUp(now)

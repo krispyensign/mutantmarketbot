@@ -1,16 +1,16 @@
 """Backtest the trading strategy."""
 
-from dataclasses import dataclass
 from datetime import datetime, timedelta
-import itertools
 import subprocess
+from typing import Any
 import numpy as np
 import pandas as pd
 import talib
 import v20  # type: ignore
+from numba import jit  # type: ignore
+from bot.common import BacktestResult, ChartConfig, SolverConfig
 from core.chart import heiken_ashi_numpy
 from numpy.typing import NDArray
-from numba import jit  # type: ignore
 
 from core.kernel import EdgeCategory, KernelConfig, kernel_stage_1
 from bot.exchange import (
@@ -20,10 +20,8 @@ from bot.exchange import (
 
 import logging
 
-APP_START_TIME = datetime.now()
 
-
-def get_git_info() -> tuple[str, bool, Exception | None]:
+def get_git_info() -> tuple[str, bool] | Exception:
     """Get commit hash and whether the working tree is clean.
 
     Returns a tuple (str, bool). The first element is the commit hash. The second
@@ -43,76 +41,12 @@ def get_git_info() -> tuple[str, bool, Exception | None]:
             ["git", "status", "--porcelain"], encoding="utf-8"
         ).strip()
 
-        return commit_hash, porcelain_status == "", None
+        return commit_hash, porcelain_status == ""
     except subprocess.CalledProcessError as e:
-        return "", False, e
+        return e
 
 
-class PerfTimer:
-    """PerfTimer class."""
-
-    def __init__(self, app_start_time: datetime, logger: logging.Logger):
-        """Initialize a PerfTimer object."""
-        self.app_start_time = app_start_time
-        self.logger = logger
-        pass
-
-    def __enter__(self):
-        """Start the timer."""
-        self.start = datetime.now()
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        """Stop the timer."""
-        self.end = datetime.now()
-        self.logger.info(f"run interval: {self.end - self.start}")
-        self.logger.info("up time: %s", (self.end - self.app_start_time))
-        self.logger.info("last run time: %s", self.end.strftime("%Y-%m-%d %H:%M:%S"))
-
-
-@dataclass
-class ChartConfig:
-    """ChartConfig class."""
-
-    instrument: str
-    granularity: str
-    candle_count: int
-    datefrom: datetime | None = None
-
-
-@dataclass
-class SolverConfig:
-    """SolverConfig class."""
-
-    take_profit: list[float]
-    stop_loss: list[float]
-    source_columns: list[str]
-
-    def get_column_pairs(self) -> tuple[itertools.product, int]:
-        """Get column pairs."""
-        return itertools.product(
-            self.source_columns,
-            self.source_columns,
-            self.source_columns,
-            self.take_profit,
-            self.stop_loss,
-        ), len(self.source_columns) ** 3 * len(self.take_profit) * len(self.stop_loss)
-
-
-@dataclass
-class BacktestResult:
-    """BacktestResult class."""
-
-    instrument: str
-    kernel_conf: KernelConfig
-    ratio: np.float64
-    exit_total: np.float64
-    sample_total: np.float64
-
-
-def preprocess(
-    df: pd.DataFrame, wma_period: int, convert: bool
-) -> dict[str, NDArray] | pd.DataFrame:
+def preprocess(df: pd.DataFrame, wma_period: int) -> pd.DataFrame:
     # calculate the ATR for the trailing stop loss
     """Preprocess the DataFrame to calculate various technical indicators.
 
@@ -210,11 +144,6 @@ def preprocess(
         df["ha_ask_close"].to_numpy(), timeperiod=wma_period
     )
 
-    if convert:
-        result_dict = _convert_to_dict(df)
-
-        return result_dict
-
     return df
 
 
@@ -226,17 +155,12 @@ def _convert_to_dict(df: pd.DataFrame) -> dict[str, NDArray[np.float64]]:
 
 
 def _solve_run(
-    kernel_conf_in: KernelConfig,
-    config_tuple: tuple | None,
+    kernel_conf: KernelConfig,
     ask_column: NDArray[np.float64],
     atr: NDArray[np.float64],
     df: dict,
-) -> tuple[KernelConfig, np.float64, np.float64] | None:
+) -> (tuple[np.float64, np.float64, np.int64, np.int64, np.float64] | None):
     # run the backtest
-    if config_tuple is not None:
-        kernel_conf = _map_kernel_conf(kernel_conf_in, config_tuple)
-    else:
-        kernel_conf = kernel_conf_in
     wma = df[f"wma_{kernel_conf.source_column}"]
     (
         _,
@@ -258,16 +182,25 @@ def _solve_run(
         kernel_conf.edge == EdgeCategory.Quasi,
     )
 
-    # filter invalid results
-    if _is_invalid_scenario(exit_value, exit_total):
-        return None
+    result = _stats(exit_value, exit_total)
 
-    wins = np.where(exit_value > 0, 1, 0).astype(np.int64).sum()
-    losses = np.where(exit_value < 0, 1, 0).astype(np.int64).sum()
-    if wins + losses == 0:
-        return kernel_conf, np.float64(0.0), np.float64(0.0)
-    ratio = wins / (wins + losses)
-    return kernel_conf, ratio, exit_total[-1]
+    return result
+
+
+@jit(nopython=True)
+def _stats(
+    exit_value: NDArray[Any], exit_total: NDArray[Any]
+) -> tuple[np.float64, np.float64, np.int64, np.int64, np.float64] | None:
+    final_total = exit_total[-1] if exit_total[-1] > 0 else np.float64(0.0)
+    min_total = exit_total.min()
+    max_total = exit_total.max()
+    if final_total <= 0.0 or max_total < abs(min_total):
+        return None
+    wins: np.int64 = np.where(exit_value > 0, 1, 0).astype(np.int64).sum()
+    losses: np.int64 = np.where(exit_value < 0, 1, 0).astype(np.int64).sum()
+    ratio = np.float64(wins / (wins + losses))
+    
+    return final_total, min_total, wins, losses, ratio
 
 
 def solve(
@@ -303,81 +236,60 @@ def solve(
     """
     logger = logging.getLogger("backtest")
     logger.info("starting backtest")
-    commit, porcelain, err = get_git_info()
-    if err is not None:
-        logger.error("failed to get git info: %s", err)
+    git_info = get_git_info()
+    if type(git_info) is not tuple:
+        logger.error("failed to get git info: %s", git_info)
         return None
 
-    logger.info("git info: %s %s", commit, porcelain)
+    logger.info("git info: %s %s", git_info[0], git_info[1])
 
     # get data and preprocess
-    orig_df: pd.DataFrame = preprocess(
-        _get_data(chart_config, token, logger), kernel_conf_in.wma_period, False
-    )  # type: ignore
+    orig_df = preprocess(
+        _get_data(chart_config, token, logger), kernel_conf_in.wma_period
+    )
 
-    # partition final 10% of orig_df rows into a separate df
-    split_idx = int(len(orig_df["close"]) * 0.9)
-    orig_df_train = orig_df.iloc[:split_idx]
-    logger.info(f"train rows: {len(orig_df_train)}")
-    orig_df_test = orig_df.iloc[split_idx:]
-    logger.info(f"test rows: {len(orig_df_test)}")
+    # convert to dict for speed
+    df = _convert_to_dict(orig_df)
+    atr = df["atr"]
+    ask = df["ask_close"]
 
+    # init
     best_result: BacktestResult | None = None
-    column_pairs, column_pair_len = backtest_config.get_column_pairs()
-    logger.info(f"total_combinations: {column_pair_len}")
+    configs, num_configs = backtest_config.get_configs(kernel_conf_in)
     total_found = 0
     count = 0
     filter_start_time = datetime.now()
+    logger.info(f"total_combinations: {num_configs}")
 
-    df_train = _convert_to_dict(orig_df_train)
-    atr_train = df_train["atr"]
-    ask_column_train = df_train["ask_close"]
-    df_test = _convert_to_dict(orig_df_test)
-    atr_test = df_test["atr"]
-    ask_column_test = df_test["ask_close"]
-    for config_tuple in column_pairs:
+    # run all combinations
+    for kernel_conf in configs:
         # log progress
         count = _log_progress(
-            logger, column_pair_len, total_found, count, filter_start_time
+            logger, num_configs, total_found, count, filter_start_time
         )
 
-        # run training set
-        result = _solve_run(
-            kernel_conf_in, config_tuple, ask_column_train, atr_train, df_train
-        )
+        # run
+        result = _solve_run(kernel_conf, ask, atr, df)
         if result is None:
             continue
 
-        # run on test set
-        sample_result = _solve_run(
-            kernel_conf_in, config_tuple, ask_column_test, atr_test, df_test
-        )
-        if sample_result is None:
-            continue
-
-        # save result if valid
+        # update best
         total_found += 1
-        kernel_conf, ratio, et = result
-        _, _, st = sample_result
+        et, _, wins, losses, ratio = result
         if (
             best_result is None
-            or (ratio != 1.0 and ratio > best_result.ratio)
-            and (et > best_result.exit_total or st > best_result.sample_total)
+            or (ratio >= best_result.ratio)
+            and (et >= best_result.exit_total)
         ):
-            logger.info(
-                "result: %s r:%s et:%s st:%s",
-                kernel_conf,
-                round(ratio, 2),
-                round(et, 5),
-                round(st, 5),
-            )
             best_result = BacktestResult(
                 chart_config.instrument,
                 kernel_conf,
-                ratio,
                 et,
-                st,
+                np.float64(ratio),
+                wins,
+                losses,
             )
+            logger.debug(best_result)
 
     logger.info("total_found: %s", total_found)
     if total_found == 0:
@@ -402,7 +314,7 @@ def _log_progress(
         time_diff = time_now - start_time
         throughput = count / time_diff.total_seconds()
         remaining = timedelta(seconds=(column_pair_len - count) / throughput)
-        logger.info(
+        logger.debug(
             "heartbeat: %s %s%% %s/%s %s/s %s remaining",
             total_found,
             round(100 * count / column_pair_len, 2),
@@ -456,33 +368,3 @@ def _get_data(
     )
 
     return orig_df
-
-
-def _map_kernel_conf(
-    kernel_conf_in: KernelConfig, config_tuple: tuple[str, str, str, float, float]
-) -> KernelConfig:
-    kernel_conf = KernelConfig(
-        wma_period=kernel_conf_in.wma_period,
-        signal_buy_column=config_tuple[0],
-        signal_exit_column=config_tuple[1],
-        source_column=config_tuple[2],
-        take_profit=config_tuple[3],
-        stop_loss=config_tuple[4],
-    )
-
-    return kernel_conf
-
-
-@jit(nopython=True)
-def _is_invalid_scenario(
-    exit_value: NDArray[np.float64], exit_total: NDArray[np.float64]
-) -> np.bool:
-    wins: np.float64 = np.where(exit_value > 0, 1, 0).astype(np.int64).sum()
-    final_exit_total: np.float64 = exit_total[-1]
-    return (
-        wins == 0
-        or final_exit_total < 0
-        or (
-            exit_value.min() < 0 and np.abs(exit_value.min()) > np.abs(final_exit_total)
-        )
-    )
