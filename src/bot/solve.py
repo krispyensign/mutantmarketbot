@@ -382,7 +382,7 @@ def solve(
         # update best
         total_found += 1
         et, wins, losses = result
-        ratio = (wins / (wins + losses)).astype(np.float64)
+        ratio = wins / (wins + losses)
         if (
             best_result is None
             or (ratio >= best_result.ratio)
@@ -392,7 +392,7 @@ def solve(
                 chart_config.instrument,
                 kernel_conf,
                 et,
-                ratio,
+                np.float64(ratio),
                 wins,
                 losses,
             )
