@@ -172,6 +172,8 @@ def kernel_stage_1(
         Whether to use exit data or not.
     erase: bool
         Whether to erase trades or not.
+    should_roll: bool
+        Whether to roll the wma or not.
 
     Returns
     -------
