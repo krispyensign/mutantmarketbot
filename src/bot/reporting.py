@@ -1,12 +1,10 @@
 """Functions for reporting trading results."""
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 import pandas as pd
 import logging
 
 from core.kernel import KernelConfig
-
-APP_START_TIME = datetime.now()
 
 
 def report(

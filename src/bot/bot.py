@@ -1,14 +1,21 @@
 """Bot that trades on Oanda."""
 
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 import logging
 from time import sleep
-import uuid
 import v20  # type: ignore
 import pandas as pd
 
-from bot.solve import ChartConfig, PerfTimer, SolverConfig, get_git_info, preprocess, solve
+from bot.common import (
+    APP_START_TIME,
+    HALF_MINUTE,
+    BotConfig,
+    ChartConfig,
+    OandaConfig,
+    PerfTimer,
+    TradeConfig,
+)
+from bot.solve import get_git_info, preprocess, solve
 from core.kernel import EdgeCategory, KernelConfig, kernel
 from bot.reporting import report
 from bot.exchange import (
@@ -18,20 +25,6 @@ from bot.exchange import (
     place_order,
     OandaContext,
 )
-
-APP_START_TIME = datetime.now()
-FRIDAY = 5
-SUNDAY = 7
-FIVE_PM = 21
-HALF_MINUTE = 30
-
-
-@dataclass
-class TradeConfig:
-    """Configuration for the bot."""
-
-    amount: float
-    bot_id: uuid.UUID
 
 
 def bot_run(
@@ -111,25 +104,6 @@ def get_rec(kernel_conf, trade_id, df):
     else:
         rec = df.iloc[-2]
     return rec
-
-
-@dataclass
-class BotConfig:
-    """Configuration for the bot."""
-
-    chart_conf: ChartConfig
-    kernel_conf: KernelConfig
-    trade_conf: TradeConfig
-    solver_conf: SolverConfig
-    observe_only: bool
-
-
-@dataclass
-class OandaConfig:
-    """Configuration for Oanda."""
-
-    token: str
-    account_id: str
 
 
 def bot(
