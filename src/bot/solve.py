@@ -156,11 +156,12 @@ def _convert_to_dict(df: pd.DataFrame) -> dict[str, NDArray[np.float64]]:
 
 def _solve_run(
     kernel_conf: KernelConfig,
-    ask_column: NDArray[np.float64],
-    atr: NDArray[np.float64],
     df: dict,
-) -> (tuple[np.float64, np.float64, np.int64, np.int64, np.float64] | None):
+    ask_data: NDArray[Any],
+    atr: NDArray[Any],
+) -> tuple[np.float64, np.float64, np.int64, np.int64, np.float64] | None:
     # run the backtest
+    should_roll = "open" not in kernel_conf.source_column and kernel_conf.edge != EdgeCategory.Deterministic
     wma = df[f"wma_{kernel_conf.source_column}"]
     (
         _,
@@ -173,13 +174,14 @@ def _solve_run(
         df[kernel_conf.signal_buy_column],
         df[kernel_conf.signal_exit_column],
         wma,
-        ask_column,
+        ask_data,
         df[kernel_conf.bid_column],
         atr,
         kernel_conf.take_profit,
         kernel_conf.stop_loss,
         kernel_conf.signal_buy_column != kernel_conf.signal_exit_column,
         kernel_conf.edge == EdgeCategory.Quasi,
+        should_roll,
     )
 
     result = _stats(exit_value, exit_total)
@@ -196,10 +198,11 @@ def _stats(
     max_total = exit_total.max()
     if final_total <= 0.0 or max_total < abs(min_total):
         return None
+
     wins: np.int64 = np.where(exit_value > 0, 1, 0).astype(np.int64).sum()
     losses: np.int64 = np.where(exit_value < 0, 1, 0).astype(np.int64).sum()
     ratio = np.float64(wins / (wins + losses))
-    
+
     return final_total, min_total, wins, losses, ratio
 
 
@@ -250,8 +253,6 @@ def solve(
 
     # convert to dict for speed
     df = _convert_to_dict(orig_df)
-    atr = df["atr"]
-    ask = df["ask_close"]
 
     # init
     best_result: BacktestResult | None = None
@@ -262,6 +263,8 @@ def solve(
     logger.info(f"total_combinations: {num_configs}")
 
     # run all combinations
+    atr = df["atr"]
+    ask = df["ask_close"]
     for kernel_conf in configs:
         # log progress
         count = _log_progress(
@@ -269,7 +272,7 @@ def solve(
         )
 
         # run
-        result = _solve_run(kernel_conf, ask, atr, df)
+        result = _solve_run(kernel_conf, df, ask, atr)
         if result is None:
             continue
 

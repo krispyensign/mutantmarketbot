@@ -76,7 +76,7 @@ def take_profit(
 
     """
     take_profit_array = take_profit_value * atr
-    signal = np.where((position_value > take_profit_array) & (trigger != 1), 0, signal)
+    signal = np.where(position_value > take_profit_array, 0, signal)
     trigger = np.diff(signal)
     trigger = np.concatenate((np.zeros(1), trigger))
     return signal.astype(np.int64), trigger.astype(np.int64)

@@ -135,7 +135,7 @@ def getOandaOHLC(
     return df
 
 
-def place_order(
+def place_market_order(
     ctx: OandaContext,
     amount: float,
     id: uuid.UUID,
