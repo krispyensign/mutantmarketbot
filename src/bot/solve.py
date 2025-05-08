@@ -289,7 +289,7 @@ def solve(
                 wins,
                 losses,
             )
-            logger.info(best_result)
+            logger.debug(best_result)
 
     logger.info("total_found: %s", total_found)
     if total_found == 0:
