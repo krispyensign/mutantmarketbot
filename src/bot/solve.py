@@ -2,12 +2,13 @@
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-import itertools
 import subprocess
+from typing import Any, Generator
 import numpy as np
 import pandas as pd
 import talib
 import v20  # type: ignore
+from numba import jit  # type: ignore
 from core.chart import heiken_ashi_numpy
 from numpy.typing import NDArray
 
@@ -87,15 +88,42 @@ class SolverConfig:
     stop_loss: list[float]
     source_columns: list[str]
 
-    def get_column_pairs(self) -> tuple[itertools.product, int]:
+    def get_configs(
+        self, kernel_conf: KernelConfig
+    ) -> tuple[Generator[KernelConfig], int]:
         """Get column pairs."""
-        return itertools.product(
-            self.source_columns,
-            self.source_columns,
-            self.source_columns,
-            self.take_profit,
-            self.stop_loss,
-        ), len(self.source_columns) ** 3 * len(self.take_profit) * len(self.stop_loss)
+        if kernel_conf.signal_buy_column == "":
+            gen = (
+                KernelConfig(
+                    signal_buy_column=sb,
+                    signal_exit_column=se,
+                    source_column=so,
+                    take_profit=tp,
+                    stop_loss=sl,
+                    wma_period=kernel_conf.wma_period,
+                )
+                for so in self.source_columns
+                for sb in self.source_columns
+                for se in self.source_columns
+                for tp in self.take_profit
+                for sl in self.stop_loss
+            )
+        else:
+            gen = (
+                KernelConfig(
+                    signal_buy_column=kernel_conf.signal_buy_column,
+                    signal_exit_column=kernel_conf.signal_exit_column,
+                    source_column=kernel_conf.source_column,
+                    wma_period=kernel_conf.wma_period,
+                    take_profit=tp,
+                    stop_loss=sl,
+                )
+                for tp in self.take_profit
+                for sl in self.stop_loss
+            )
+        return gen, len(self.source_columns) ** 3 * len(self.take_profit) * len(
+            self.stop_loss
+        )
 
 
 @dataclass
@@ -105,9 +133,7 @@ class BacktestResult:
     instrument: str
     kernel_conf: KernelConfig
     exit_total: np.float64
-    sample_total: np.float64
     ratio: np.float64
-    sratio: np.float64
     wins: np.int64
     losses: np.int64
 
@@ -116,9 +142,7 @@ class BacktestResult:
         return (
             f"result: {self.kernel_conf} "
             f"et:{round(self.exit_total, 5)} "
-            f"st:{round(self.sample_total, 5)} "
             f"r:{round(self.ratio, 5)} "
-            f"sr:{round(self.sratio, 5)} "
             f"wins:{self.wins} "
             f"losses:{self.losses}"
         )
@@ -240,17 +264,12 @@ def _convert_to_dict(df: pd.DataFrame) -> dict[str, NDArray[np.float64]]:
 
 
 def _solve_run(
-    kernel_conf_in: KernelConfig,
-    config_tuple: tuple | None,
+    kernel_conf: KernelConfig,
     ask_column: NDArray[np.float64],
     atr: NDArray[np.float64],
     df: dict,
-) -> tuple[KernelConfig, np.float64, np.int64, np.int64] | None:
+) -> tuple[np.float64, np.int64, np.int64] | None:
     # run the backtest
-    if config_tuple is not None:
-        kernel_conf = _map_kernel_conf(kernel_conf_in, config_tuple)
-    else:
-        kernel_conf = kernel_conf_in
     wma = df[f"wma_{kernel_conf.source_column}"]
     (
         _,
@@ -272,14 +291,22 @@ def _solve_run(
         kernel_conf.edge == EdgeCategory.Quasi,
     )
 
-    final_total = exit_total[-1] if exit_total[-1] > 0 else np.float64(0.0)
-    if final_total <= 0.0:
+    final_total, min_total, wins, losses = _stats(exit_value, exit_total)
+    if final_total <= 0.0 or final_total < abs(min_total):
         return None
 
+    return (final_total, wins, losses)
+
+
+@jit(nopython=True)
+def _stats(
+    exit_value: NDArray[Any], exit_total: NDArray[Any]
+) -> tuple[np.float64, np.float64, np.int64, np.int64]:
+    final_total = exit_total[-1] if exit_total[-1] > 0 else np.float64(0.0)
+    min_total = exit_total.min()
     wins: np.int64 = np.where(exit_value > 0, 1, 0).astype(np.int64).sum()
     losses: np.int64 = np.where(exit_value < 0, 1, 0).astype(np.int64).sum()
-
-    return (kernel_conf, final_total, wins, losses)
+    return final_total, min_total, wins, losses
 
 
 def solve(
@@ -327,71 +354,47 @@ def solve(
         _get_data(chart_config, token, logger), kernel_conf_in.wma_period, False
     )  # type: ignore
 
-    # partition final 10% of orig_df rows into a separate df
-    split_idx = int(len(orig_df["close"]) * 0.5)
-
-    # split into train
-    df_train = _convert_to_dict(orig_df.iloc[:split_idx])
-    atr_train = df_train["atr"]
-    ask_column_train = df_train["ask_close"]
-
-    # and test
-    df_test = _convert_to_dict(orig_df.iloc[split_idx:])
-    atr_test = df_test["atr"]
-    ask_column_test = df_test["ask_close"]
+    # convert to dict for speed
+    df = _convert_to_dict(orig_df)
+    atr = df["atr"]
+    ask = df["ask_close"]
 
     # init
     best_result: BacktestResult | None = None
-    column_pairs, column_pair_len = backtest_config.get_column_pairs()
+    configs, num_configs = backtest_config.get_configs(kernel_conf_in)
     total_found = 0
     count = 0
     filter_start_time = datetime.now()
-
-    logger.info(f"train rows: {len(atr_train)}")
-    logger.info(f"test rows: {len(atr_test)}")
-    logger.info(f"total_combinations: {column_pair_len}")
+    logger.info(f"total_combinations: {num_configs}")
 
     # run all combinations
-    for config_tuple in column_pairs:
+    for kernel_conf in configs:
         # log progress
         count = _log_progress(
-            logger, column_pair_len, total_found, count, filter_start_time
+            logger, num_configs, total_found, count, filter_start_time
         )
 
-        # run on training set
-        result = _solve_run(
-            kernel_conf_in, config_tuple, ask_column_train, atr_train, df_train
-        )
+        # run
+        result = _solve_run(kernel_conf, ask, atr, df)
         if result is None:
-            continue
-
-        # run on test set
-        sample_result = _solve_run(
-            kernel_conf_in, config_tuple, ask_column_test, atr_test, df_test
-        )
-        if sample_result is None:
             continue
 
         # update best
         total_found += 1
-        kernel_conf, et, wins, losses = result
-        _, st, swins, slosses = sample_result
+        et, wins, losses = result
         ratio = (wins / (wins + losses)).astype(np.float64)
-        sratio = (swins / (swins + slosses)).astype(np.float64)
         if (
             best_result is None
-            or (ratio >= best_result.ratio or sratio >= best_result.sratio)
-            and (et >= best_result.exit_total and st >= best_result.sample_total)
+            or (ratio >= best_result.ratio)
+            and (et >= best_result.exit_total)
         ):
             best_result = BacktestResult(
                 chart_config.instrument,
                 kernel_conf,
                 et,
-                st,
                 ratio,
-                sratio,
-                wins + swins,
-                losses + slosses,
+                wins,
+                losses,
             )
             logger.info(best_result)
 
@@ -472,18 +475,3 @@ def _get_data(
     )
 
     return orig_df
-
-
-def _map_kernel_conf(
-    kernel_conf_in: KernelConfig, config_tuple: tuple[str, str, str, float, float]
-) -> KernelConfig:
-    kernel_conf = KernelConfig(
-        wma_period=kernel_conf_in.wma_period,
-        signal_buy_column=config_tuple[0],
-        signal_exit_column=config_tuple[1],
-        source_column=config_tuple[2],
-        take_profit=config_tuple[3],
-        stop_loss=config_tuple[4],
-    )
-
-    return kernel_conf

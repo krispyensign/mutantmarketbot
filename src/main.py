@@ -56,7 +56,7 @@ if __name__ == "__main__":
         if result is None:
             sys.exit(1)
 
-        logger.info("ins: %s", result)
+        logger.info("%s", result)
 
     elif sys.argv[1] in ["bot", "observe"]:
         # load config
