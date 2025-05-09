@@ -20,3 +20,4 @@ local_configs/
 logs/
 dist/
 logs/**/*.json
+nohup.out

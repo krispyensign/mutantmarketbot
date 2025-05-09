@@ -86,7 +86,7 @@ def bot_run(
 
 def get_is_strict(kernel_conf: KernelConfig, trade_id: int) -> bool:
     """Get the strictness of the bot."""
-    is_strict = not (kernel_conf.edge == EdgeCategory.Latest and trade_id != -1)
+    is_strict = not (kernel_conf.edge == EdgeCategory.Fast and trade_id != -1)
     return is_strict
 
 
@@ -236,7 +236,7 @@ def log_event(
             df,
             bot_conf.chart_conf.instrument,
             kernel_conf,
-            length=10 if bot_conf.backtest_only else 3,
+            length=30 if bot_conf.backtest_only else 3,
         )
 
 

@@ -80,7 +80,7 @@ class KernelConfig:
         if self.edge == EdgeCategory.Deterministic:
             return "bid_close"
         elif self.edge == EdgeCategory.Fast:
-            return "wma_bid_open"
+            return "bid_low"
         else:
             return "bid_open"
 
