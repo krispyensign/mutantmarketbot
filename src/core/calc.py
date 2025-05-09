@@ -115,7 +115,7 @@ def stop_loss(
 
     """
     stop_loss_array = -stop_loss_value * atr
-    signal = np.where((position_value < stop_loss_array) & (trigger != 1), 0, signal)
+    signal = np.where(position_value < stop_loss_array, 0, signal)
     trigger = np.diff(signal)
     trigger = np.concatenate((np.zeros(1), trigger))
     return signal.astype(np.int64), trigger.astype(np.int64)
