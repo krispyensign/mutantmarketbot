@@ -238,6 +238,12 @@ def kernel_stage_1(
         for i in range(3, len(signal)):
             if signal[i - 2] == 0 and signal[i - 1] == 1 and signal[i - 0] == 0:
                 signal[i - 1] = 0
+        position_value = entry_price(
+            ask_data,
+            bid_data,
+            signal,
+            trigger,
+        )
 
     exit_value = np.where(trigger == -1, position_value, 0)
     et = np.cumsum(exit_value)
