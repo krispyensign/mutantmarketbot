@@ -144,6 +144,7 @@ def bot(
         logger.error("failed to get git info: %s", git_info)
         return None
 
+    sconf: KernelConfig
     solver_result = solve(
         bot_conf.chart_conf,
         bot_conf.kernel_conf,
@@ -152,10 +153,11 @@ def bot(
     )
     if solver_result is None:
         logger.error("failed to solve.")
-        return None
+        sconf = bot_conf.kernel_conf
     else:
         logger.info("selected %s", solver_result.kernel_conf)
-    sconf: KernelConfig = solver_result.kernel_conf
+        sconf = solver_result.kernel_conf
+    last_solver_time = datetime.now()
 
     if not bot_conf.backtest_only:
         sleep_until_next_5_minute()
@@ -183,6 +185,26 @@ def bot(
         if bot_conf.backtest_only:
             break
 
+        if (
+            trade_id == -1
+            and (datetime.now() - last_solver_time).total_seconds()
+            > bot_conf.solver_conf.solver_interval
+        ):
+            solver_result = solve(
+                bot_conf.chart_conf,
+                bot_conf.kernel_conf,
+                oanda_ctx.token,
+                bot_conf.solver_conf,
+            )
+            if solver_result is None:
+                logger.error("failed to solve.")
+                sconf = bot_conf.kernel_conf
+            else:
+                logger.info("selected %s", solver_result.kernel_conf)
+                sconf = solver_result.kernel_conf
+            last_solver_time = datetime.now()
+
+        # if fast edge, sleep
         if trade_id != -1 and bot_conf.kernel_conf.edge == EdgeCategory.Fast:
             sleep(2)
         else:

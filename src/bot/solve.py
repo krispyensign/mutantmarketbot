@@ -161,7 +161,10 @@ def _solve_run(
     atr: NDArray[Any],
 ) -> tuple[np.float64, np.float64, np.int64, np.int64, np.float64] | None:
     # run the backtest
-    should_roll = "open" not in kernel_conf.source_column and kernel_conf.edge != EdgeCategory.Deterministic
+    should_roll = (
+        "open" not in kernel_conf.source_column
+        and kernel_conf.edge != EdgeCategory.Deterministic
+    )
     wma = df[f"wma_{kernel_conf.source_column}"]
     (
         _,
@@ -270,6 +273,12 @@ def solve(
         count = _log_progress(
             logger, num_configs, total_found, count, filter_start_time
         )
+
+        if (
+            backtest_config.force_edge != ""
+            and EdgeCategory[backtest_config.force_edge] != kernel_conf.edge
+        ):
+            continue
 
         # run
         result = _solve_run(kernel_conf, df, ask, atr)

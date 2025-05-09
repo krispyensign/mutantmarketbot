@@ -50,8 +50,8 @@ class KernelConfig:
         """
         if "open" in self.signal_exit_column:
             return EdgeCategory.Quasi
-        # elif "low" in self.signal_exit_column:
-        #     return EdgeCategory.Fast
+        elif "bid_low" == self.signal_exit_column:
+            return EdgeCategory.Fast
         else:
             return EdgeCategory.Deterministic
 
@@ -278,7 +278,9 @@ def kernel(
     """
     # calculate the entry and exit signals
     df["wma"] = df[f"wma_{config.source_column}"]
-    should_roll = "open" not in config.source_column and config.edge != EdgeCategory.Deterministic
+    should_roll = (
+        "open" not in config.source_column and config.edge != EdgeCategory.Deterministic
+    )
     (
         df["signal"],
         df["trigger"],
