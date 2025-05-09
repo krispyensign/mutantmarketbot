@@ -14,8 +14,13 @@ solutions already available. DO NOT USE WITHOUT FIRST TESTING YOURSELF.
 wget https://github.com/ta-lib/ta-lib/releases/download/v0.6.4/ta-lib_0.6.4_amd64.deb
 sudo apt install -y ./ta-lib_0.6.4_amd64.deb
 
-# install everything else
+# install uv
 curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# install the deps
+uv pip install '.'
+
+# or
 uv pip install '.[dev]'
 
 # setup Oanda tokens
