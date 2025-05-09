@@ -48,8 +48,10 @@ class KernelConfig:
             The edge of the kernel.
 
         """
-        if "open" in self.source_column and "open" in self.signal_exit_column:
+        if "open" in self.signal_exit_column:
             return EdgeCategory.Quasi
+        elif "bid_low" == self.signal_exit_column:
+            return EdgeCategory.Fast
         else:
             return EdgeCategory.Deterministic
 
@@ -77,6 +79,8 @@ class KernelConfig:
         """
         if self.edge == EdgeCategory.Deterministic:
             return "bid_close"
+        elif self.edge == EdgeCategory.Fast:
+            return f"wma_{self.source_column}"
         else:
             return "bid_open"
 
@@ -90,9 +94,13 @@ def wma_exit_signals(
     buy_data: NDArray[np.float64],
     exit_data: NDArray[np.float64],
     wma_data: NDArray[np.float64],
+    should_roll: np.bool,
 ) -> tuple[NDArray[np.int64], NDArray[np.int64]]:
     """Calculate the weighted moving average."""
     signals = np.zeros(len(buy_data)).astype(np.bool_)
+    if should_roll:
+        wma_data = np.roll(wma_data, 1)
+        wma_data[0] = np.nan
     buy_signals = np.where(buy_data > wma_data, np.True_, np.False_)
     exit_signals = np.where(exit_data > wma_data, np.True_, np.False_)
     for i in range(1, len(buy_signals)):
@@ -133,6 +141,7 @@ def kernel_stage_1(
     stop_loss_conf: np.float64,
     use_exit: np.bool,
     erase: np.bool,
+    should_roll: np.bool,
 ):
     """Perform the first stage of the kernel.
 
@@ -163,6 +172,8 @@ def kernel_stage_1(
         Whether to use exit data or not.
     erase: bool
         Whether to erase trades or not.
+    should_roll: bool
+        Whether to roll the wma or not.
 
     Returns
     -------
@@ -180,6 +191,7 @@ def kernel_stage_1(
             buy_data,
             exit_data,
             wma_data,
+            should_roll,
         )
     else:
         signal, trigger = wma_signals_no_exit(buy_data, wma_data)
@@ -226,6 +238,12 @@ def kernel_stage_1(
         for i in range(3, len(signal)):
             if signal[i - 2] == 0 and signal[i - 1] == 1 and signal[i - 0] == 0:
                 signal[i - 1] = 0
+        position_value = entry_price(
+            ask_data,
+            bid_data,
+            signal,
+            trigger,
+        )
 
     exit_value = np.where(trigger == -1, position_value, 0)
     et = np.cumsum(exit_value)
@@ -260,6 +278,9 @@ def kernel(
     """
     # calculate the entry and exit signals
     df["wma"] = df[f"wma_{config.source_column}"]
+    should_roll = (
+        "open" not in config.source_column and config.edge != EdgeCategory.Deterministic
+    )
     (
         df["signal"],
         df["trigger"],
@@ -278,6 +299,7 @@ def kernel(
         config.stop_loss,
         config.signal_buy_column != config.signal_exit_column,
         config.edge == EdgeCategory.Quasi,
+        should_roll,
     )
 
     return df

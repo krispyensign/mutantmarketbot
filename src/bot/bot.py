@@ -20,7 +20,7 @@ from bot.exchange import (
     close_trade,
     get_open_trade,
     getOandaOHLC,
-    place_order,
+    place_market_order,
     OandaContext,
 )
 
@@ -67,7 +67,7 @@ def bot_run(
     try:
         rec = get_rec(kernel_conf, trade_id, df)
         if rec.trigger == 1 and trade_id == -1:
-            trade_id = place_order(
+            trade_id = place_market_order(
                 ctx,
                 trade_conf.amount,
                 trade_conf.bot_id,
@@ -77,6 +77,7 @@ def bot_run(
             rec.trigger == 0 and rec.signal == 0 and trade_id != -1
         ):
             close_trade(ctx, trade_id)
+            trade_id = -1
     except Exception as err:
         return trade_id, df, err
 
@@ -85,7 +86,7 @@ def bot_run(
 
 def get_is_strict(kernel_conf: KernelConfig, trade_id: int) -> bool:
     """Get the strictness of the bot."""
-    is_strict = not (kernel_conf.edge == EdgeCategory.Latest and trade_id != -1)
+    is_strict = not (kernel_conf.edge == EdgeCategory.Fast and trade_id != -1)
     return is_strict
 
 
@@ -143,6 +144,7 @@ def bot(
         logger.error("failed to get git info: %s", git_info)
         return None
 
+    sconf: KernelConfig
     solver_result = solve(
         bot_conf.chart_conf,
         bot_conf.kernel_conf,
@@ -151,13 +153,14 @@ def bot(
     )
     if solver_result is None:
         logger.error("failed to solve.")
-        return None
+        sconf = bot_conf.kernel_conf
     else:
         logger.info("selected %s", solver_result.kernel_conf)
-    sconf: KernelConfig = solver_result.kernel_conf
+        sconf = solver_result.kernel_conf
+    last_solver_time = datetime.now()
 
     if not bot_conf.backtest_only:
-        sleep_until_next_5_minute(trade_id=-1)
+        sleep_until_next_5_minute()
 
     # run bot
     trade_id: int = -1
@@ -179,7 +182,14 @@ def bot(
 
         log_event(bot_conf, sconf, trade_id, df, git_info)
 
-        if trade_id == -1:
+        if bot_conf.backtest_only:
+            break
+
+        if (
+            trade_id == -1
+            and (datetime.now() - last_solver_time).total_seconds()
+            > bot_conf.solver_conf.solver_interval
+        ):
             solver_result = solve(
                 bot_conf.chart_conf,
                 bot_conf.kernel_conf,
@@ -188,15 +198,17 @@ def bot(
             )
             if solver_result is None:
                 logger.error("failed to solve.")
-                return None
+                sconf = bot_conf.kernel_conf
             else:
                 logger.info("selected %s", solver_result.kernel_conf)
-            sconf = solver_result.kernel_conf
+                sconf = solver_result.kernel_conf
+            last_solver_time = datetime.now()
 
-        if bot_conf.backtest_only:
-            break
-
-        sleep_until_next_5_minute(trade_id=trade_id)
+        # if fast edge, sleep
+        if trade_id != -1 and bot_conf.kernel_conf.edge == EdgeCategory.Fast:
+            sleep(2)
+        else:
+            sleep_until_next_5_minute()
 
 
 def log_event(
@@ -246,7 +258,7 @@ def log_event(
             df,
             bot_conf.chart_conf.instrument,
             kernel_conf,
-            length=10 if bot_conf.backtest_only else 3,
+            length=60 if bot_conf.backtest_only else 3,
         )
 
 
@@ -267,7 +279,7 @@ def roundUp(dt: datetime) -> datetime:
     return (dt + timedelta(minutes=5 - dt.minute % 5)).replace(second=1, microsecond=0)
 
 
-def sleep_until_next_5_minute(trade_id: int = -1) -> None:
+def sleep_until_next_5_minute() -> None:
     """Sleep until the next 5 minute interval."""
     now = datetime.now()
     next_time = roundUp(now)

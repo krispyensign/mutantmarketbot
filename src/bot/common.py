@@ -41,6 +41,8 @@ class SolverConfig:
     take_profit: list[float]
     stop_loss: list[float]
     source_columns: list[str]
+    solver_interval: int = 3600
+    force_edge: str = ""
 
     def get_configs(
         self, kernel_conf: KernelConfig
