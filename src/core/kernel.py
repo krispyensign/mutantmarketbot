@@ -99,8 +99,7 @@ def wma_exit_signals(
     """Calculate the weighted moving average."""
     signals = np.zeros(len(buy_data)).astype(np.bool_)
     if should_roll:
-        wma_data = np.roll(wma_data, 1)
-        wma_data[0] = np.nan
+        wma_data[-1] = wma_data[-2]
     buy_signals = np.where(buy_data > wma_data, np.True_, np.False_)
     exit_signals = np.where(exit_data > wma_data, np.True_, np.False_)
     for i in range(1, len(buy_signals)):
@@ -239,6 +238,8 @@ def kernel_stage_1(
         for i in range(3, len(signal)):
             if signal[i - 2] == 0 and signal[i - 1] == 1 and signal[i - 0] == 0:
                 signal[i - 1] = 0
+        trigger = np.diff(signal)
+        trigger = np.concatenate((np.zeros(1), trigger)).astype(np.int64)
         position_value = entry_price(
             ask_data,
             bid_data,

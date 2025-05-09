@@ -34,6 +34,7 @@ def bot_run(
 ) -> tuple[int, pd.DataFrame | None, Exception | None]:
     """Run the bot."""
     # get open trades and candles
+    trade_id = -1
     try:
         trade_id = get_open_trade(ctx, trade_conf.bot_id)
         df = getOandaOHLC(
@@ -205,7 +206,7 @@ def bot(
             last_solver_time = datetime.now()
 
         # if fast edge, sleep
-        if trade_id != -1 and bot_conf.kernel_conf.edge == EdgeCategory.Fast:
+        if trade_id != -1 and sconf.edge == EdgeCategory.Fast:
             sleep(2)
         else:
             sleep_until_next_5_minute()
