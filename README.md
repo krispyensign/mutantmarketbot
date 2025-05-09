@@ -14,16 +14,25 @@ solutions already available. DO NOT USE WITHOUT FIRST TESTING YOURSELF.
 wget https://github.com/ta-lib/ta-lib/releases/download/v0.6.4/ta-lib_0.6.4_amd64.deb
 sudo apt install -y ./ta-lib_0.6.4_amd64.deb
 
-# install everything else
-pip install '.[dev]'
+# install uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# install the deps
+uv pip install '.'
+
+# or
+uv pip install '.[dev]'
 
 # setup Oanda tokens
 export OANDA_TOKEN=$YOUR_OANDA_TOKEN
 export OANDA_ACCOUNT_ID=$YOUR_OANDA_ACCOUNT_ID
 
-# i.e. for bot mode
-python src/main.py bot ./example_configs/bot_config.yaml
+# bot mode
+python src/main.py bot ./example_configs/config.yaml
 
-# i.e. for backtest mode
-python src/main.py backtest USD_JPY ./example_configs/backtest_config.yaml
+# backtest mode 
+python src/main.py backtest ./example_configs/config.yaml
+
+# solver mode
+python src/main.py solve ./example_configs/config.yaml
 ```
