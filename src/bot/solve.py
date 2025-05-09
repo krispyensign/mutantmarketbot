@@ -266,6 +266,8 @@ def solve(
     atr = df["atr"]
     ask = df["ask_close"]
     for kernel_conf in configs:
+        if kernel_conf.edge != EdgeCategory.Quasi:
+            continue
         # log progress
         count = _log_progress(
             logger, num_configs, total_found, count, filter_start_time

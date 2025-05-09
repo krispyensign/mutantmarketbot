@@ -236,7 +236,7 @@ def log_event(
             df,
             bot_conf.chart_conf.instrument,
             kernel_conf,
-            length=30 if bot_conf.backtest_only else 3,
+            length=60 if bot_conf.backtest_only else 3,
         )
 
 
