@@ -87,7 +87,13 @@ def bot_run(
 
 def get_is_strict(kernel_conf: KernelConfig, trade_id: int) -> bool:
     """Get the strictness of the bot."""
-    is_strict = not (kernel_conf.edge == EdgeCategory.Fast and trade_id != -1)
+    weekday = datetime.weekday(datetime.now())
+    exchange_is_closed = (
+        (datetime.now().hour >= 23 and weekday == 4)
+        or weekday  == 5
+        or (datetime.now().hour <= 21 and weekday == 6)
+    )
+    is_strict = not exchange_is_closed or (kernel_conf.edge == EdgeCategory.Fast and trade_id != -1)
     return is_strict
 
 
@@ -109,9 +115,7 @@ def get_rec(kernel_conf: KernelConfig, trade_id: int, df: pd.DataFrame) -> pd.Se
         The last valid record of the DataFrame.
 
     """
-    if kernel_conf.edge == EdgeCategory.Latest:
-        rec = df.iloc[-1]
-    elif kernel_conf.edge in [EdgeCategory.Fast, EdgeCategory.Quasi]:
+    if kernel_conf.edge in [EdgeCategory.Fast, EdgeCategory.Quasi]:
         if trade_id == -1:
             rec = df.iloc[-2]
         else:

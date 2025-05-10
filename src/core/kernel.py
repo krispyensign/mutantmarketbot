@@ -21,7 +21,6 @@ from numba import jit  # type: ignore
 class EdgeCategory(Enum):
     """Enumeration class for edge categories."""
 
-    Latest = 1
     Quasi = 2
     Fast = 3
     Deterministic = 4
