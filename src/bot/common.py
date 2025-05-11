@@ -133,7 +133,7 @@ class PerfTimer:
         self.logger = logger
         pass
 
-    def __enter__(self) -> 'PerfTimer':
+    def __enter__(self) -> "PerfTimer":
         """Start the timer."""
         self.start = datetime.now()
         return self

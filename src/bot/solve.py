@@ -189,10 +189,10 @@ def _solve_run(
 
     result = _stats(exit_value, exit_total)
 
-    return result # type: ignore
+    return result  # type: ignore
 
 
-@jit(nopython=True) # type: ignore
+@jit(nopython=True)  # type: ignore
 def _stats(
     exit_value: NDArray[Any], exit_total: NDArray[Any]
 ) -> tuple[np.float64, np.float64, np.int64, np.int64, np.float64] | None:

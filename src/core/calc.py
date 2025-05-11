@@ -6,7 +6,7 @@ from numpy.typing import NDArray
 from numba import jit  # type: ignore
 
 
-@jit(nopython=True) # type: ignore
+@jit(nopython=True)  # type: ignore
 def exit_total(
     position_value: NDArray[np.float64],
     trigger: NDArray[np.int64],
@@ -40,7 +40,7 @@ def exit_total(
     return exit_value, exit_total, running_total
 
 
-@jit(nopython=True) # type: ignore
+@jit(nopython=True)  # type: ignore
 def take_profit(
     position_value: NDArray[Any],
     atr: NDArray[Any],
@@ -82,7 +82,7 @@ def take_profit(
     return signal.astype(np.int64), trigger.astype(np.int64)
 
 
-@jit(nopython=True) # type: ignore
+@jit(nopython=True)  # type: ignore
 def stop_loss(
     position_value: NDArray[Any],
     atr: NDArray[Any],
@@ -146,9 +146,12 @@ def forward_fill(arr: NDArray[Any]) -> NDArray[Any]:
     return result
 
 
-@jit(nopython=True) # type: ignore
+@jit(nopython=True)  # type: ignore
 def entry_price(
-    entry: NDArray[np.float64], exit: NDArray[np.float64], signal: NDArray[np.int64], trigger: NDArray[np.int64]
+    entry: NDArray[np.float64],
+    exit: NDArray[np.float64],
+    signal: NDArray[np.int64],
+    trigger: NDArray[np.int64],
 ) -> NDArray[np.float64]:
     """Calculate the entry price for a given trading signal.
 

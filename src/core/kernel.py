@@ -114,7 +114,7 @@ def wma_exit_signals(
     return signals.astype(np.int64), trigger.astype(np.int64)
 
 
-@jit(nopython=True) # type: ignore
+@jit(nopython=True)  # type: ignore
 def wma_signals_no_exit(
     buy_data: NDArray[np.float64],
     wma_data: NDArray[np.float64],
@@ -127,7 +127,7 @@ def wma_signals_no_exit(
     return signals.astype(np.int64), trigger.astype(np.int64)
 
 
-@jit(nopython=True) # type: ignore
+@jit(nopython=True)  # type: ignore
 def kernel_stage_1(
     buy_data: NDArray[Any],
     exit_data: NDArray[Any],
@@ -140,7 +140,9 @@ def kernel_stage_1(
     use_exit: np.bool,
     erase: np.bool,
     should_roll: np.bool,
-) -> tuple[NDArray[Any], NDArray[Any], NDArray[Any], NDArray[Any], NDArray[Any], NDArray[Any]]:
+) -> tuple[
+    NDArray[Any], NDArray[Any], NDArray[Any], NDArray[Any], NDArray[Any], NDArray[Any]
+]:
     """Perform the first stage of the kernel.
 
     This function takes in arrays of high and low prices, a weighted moving average

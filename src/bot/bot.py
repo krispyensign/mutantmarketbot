@@ -4,7 +4,6 @@ from datetime import datetime, timedelta
 import logging
 from time import sleep
 import pandas as pd
-from typing import Any
 
 from bot.common import (
     APP_START_TIME,
@@ -30,6 +29,7 @@ SATURDAY = 5
 SUNDAY = 6
 CLOSE_UTC = 21
 QUARTER_PAST = 15
+
 
 def bot_run(
     ctx: OandaContext,
@@ -108,7 +108,9 @@ def get_is_strict(kernel_conf: KernelConfig, trade_id: int) -> bool:
     if exchange_is_closed:
         logger.info("exchange is closed")
 
-    is_strict = not exchange_is_closed or (kernel_conf.edge == EdgeCategory.Fast and trade_id != -1)
+    is_strict = not exchange_is_closed or (
+        kernel_conf.edge == EdgeCategory.Fast and trade_id != -1
+    )
 
     return is_strict
 
