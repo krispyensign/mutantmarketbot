@@ -95,6 +95,7 @@ def get_is_strict(kernel_conf: KernelConfig, trade_id: int) -> bool:
     """Get the strictness of the bot."""
     weekday = datetime.weekday(datetime.now())
     now = datetime.now()
+
     # check if the exchange is closed
     exchange_is_closed = (
         (now.hour >= CLOSE_UTC and weekday == FRIDAY)
@@ -102,11 +103,13 @@ def get_is_strict(kernel_conf: KernelConfig, trade_id: int) -> bool:
         or (now.hour <= CLOSE_UTC and weekday == SUNDAY)
         or (now.hour == CLOSE_UTC and now.minute <= QUARTER_PAST)
     )
+
     logger = logging.getLogger("bot")
     if exchange_is_closed:
         logger.info("exchange is closed")
 
     is_strict = not exchange_is_closed or (kernel_conf.edge == EdgeCategory.Fast and trade_id != -1)
+
     return is_strict
 
 
