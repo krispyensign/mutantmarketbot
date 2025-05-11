@@ -38,7 +38,7 @@ def getOandaBalance(ctx: OandaContext) -> float:
     resp = ctx.ctx.account.get(ctx.account_id)
     if resp.body["account"]:
         account: v20.account.Account = resp.body["account"]
-        return account.balance
+        return float(account.balance)
 
     return 0
 
@@ -208,7 +208,7 @@ def place_market_order(
     return trade_id
 
 
-def IsOK(resp):
+def IsOK(resp: v20.Response) -> None:
     """Check if the response is OK."""
     if resp.body is None:
         raise Exception("No response body")
@@ -268,7 +268,7 @@ def get_open_trade(ctx: OandaContext, id: uuid.UUID) -> int:
             return -1
         for t in trades:
             if t.clientExtensions.id == str(id):
-                return t.id
+                return int(t.id)
 
     IsOK(resp)
 

@@ -28,7 +28,7 @@ ACCOUNT_ID = os.environ.get("OANDA_ACCOUNT_ID")
 USAGE = """
     mutantmarketbot
 
-      Usage: 
+      Usage:
         python main.py solve <my_config>.yaml
         python main.py bot <my_config>.yaml
         python main.py backtest <my_config>.yaml

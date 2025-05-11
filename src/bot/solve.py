@@ -156,7 +156,7 @@ def _convert_to_dict(df: pd.DataFrame) -> dict[str, NDArray[np.float64]]:
 
 def _solve_run(
     kernel_conf: KernelConfig,
-    df: dict,
+    df: dict[str, NDArray[Any]],
     ask_data: NDArray[Any],
     atr: NDArray[Any],
 ) -> tuple[np.float64, np.float64, np.int64, np.int64, np.float64] | None:
@@ -189,10 +189,10 @@ def _solve_run(
 
     result = _stats(exit_value, exit_total)
 
-    return result
+    return result # type: ignore
 
 
-@jit(nopython=True)
+@jit(nopython=True) # type: ignore
 def _stats(
     exit_value: NDArray[Any], exit_total: NDArray[Any]
 ) -> tuple[np.float64, np.float64, np.int64, np.int64, np.float64] | None:

@@ -83,12 +83,12 @@ class KernelConfig:
         else:
             return "bid_open"
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Return a string representation of the SignalConfig object."""
         return f"edge:{self.edge}, so:{self.source_column}, sib:{self.signal_buy_column}, sie:{self.signal_exit_column}, sl:{self.stop_loss}, tp:{self.take_profit}"
 
 
-@jit(nopython=True)
+@jit(nopython=True)  # type: ignore
 def wma_exit_signals(
     buy_data: NDArray[np.float64],
     exit_data: NDArray[np.float64],
@@ -114,7 +114,7 @@ def wma_exit_signals(
     return signals.astype(np.int64), trigger.astype(np.int64)
 
 
-@jit(nopython=True)
+@jit(nopython=True) # type: ignore
 def wma_signals_no_exit(
     buy_data: NDArray[np.float64],
     wma_data: NDArray[np.float64],
@@ -127,7 +127,7 @@ def wma_signals_no_exit(
     return signals.astype(np.int64), trigger.astype(np.int64)
 
 
-@jit(nopython=True)
+@jit(nopython=True) # type: ignore
 def kernel_stage_1(
     buy_data: NDArray[Any],
     exit_data: NDArray[Any],
@@ -140,7 +140,7 @@ def kernel_stage_1(
     use_exit: np.bool,
     erase: np.bool,
     should_roll: np.bool,
-):
+) -> tuple[NDArray[Any], NDArray[Any], NDArray[Any], NDArray[Any], NDArray[Any], NDArray[Any]]:
     """Perform the first stage of the kernel.
 
     This function takes in arrays of high and low prices, a weighted moving average

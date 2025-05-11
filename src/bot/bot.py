@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import logging
 from time import sleep
 import pandas as pd
+from typing import Any
 
 from bot.common import (
     APP_START_TIME,
@@ -24,6 +25,10 @@ from bot.exchange import (
     OandaContext,
 )
 
+FRIDAY = 4
+SATURDAY = 5
+SUNDAY = 6
+CLOSE_UTC = 21
 
 def bot_run(
     ctx: OandaContext,
@@ -88,16 +93,19 @@ def bot_run(
 def get_is_strict(kernel_conf: KernelConfig, trade_id: int) -> bool:
     """Get the strictness of the bot."""
     weekday = datetime.weekday(datetime.now())
+    # check if the exchange is closed
     exchange_is_closed = (
-        (datetime.now().hour >= 23 and weekday == 4)
-        or weekday  == 5
-        or (datetime.now().hour <= 21 and weekday == 6)
+        (datetime.now().hour >= CLOSE_UTC and weekday == FRIDAY)
+        or weekday  == SATURDAY
+        or (datetime.now().hour <= CLOSE_UTC and weekday == SUNDAY)
+    ) or (
     )
+
     is_strict = not exchange_is_closed or (kernel_conf.edge == EdgeCategory.Fast and trade_id != -1)
     return is_strict
 
 
-def get_rec(kernel_conf: KernelConfig, trade_id: int, df: pd.DataFrame) -> pd.Series:
+def get_rec(kernel_conf: KernelConfig, trade_id: int, df: pd.DataFrame) -> pd.Series[Any]:
     """Get the last valid record of the DataFrame.
 
     Parameters
