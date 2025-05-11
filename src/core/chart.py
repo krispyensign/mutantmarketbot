@@ -8,7 +8,7 @@ from typing import Any
 from numpy.typing import NDArray
 
 
-@jit(nopython=True)
+@jit(nopython=True)  # type: ignore
 def heiken_ashi_numpy(
     c_open: NDArray[Any],
     c_high: NDArray[Any],

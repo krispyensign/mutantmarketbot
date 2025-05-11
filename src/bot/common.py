@@ -94,7 +94,7 @@ class BacktestResult:
     wins: np.int64
     losses: np.int64
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Return a string representation of the BacktestResult object."""
         return (
             f"result: {self.kernel_conf} "
@@ -133,12 +133,12 @@ class PerfTimer:
         self.logger = logger
         pass
 
-    def __enter__(self):
+    def __enter__(self) -> "PerfTimer":
         """Start the timer."""
         self.start = datetime.now()
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(self, exc_type, exc_value, traceback) -> None:  # type:ignore
         """Stop the timer."""
         self.end = datetime.now()
         self.logger.info(f"run interval: {self.end - self.start}")

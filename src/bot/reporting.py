@@ -12,7 +12,7 @@ def report(
     instrument: str,
     kernel_conf: KernelConfig,
     length: int = 3,
-):
+) -> None:
     """Print a report of the trading results.
 
     Parameters

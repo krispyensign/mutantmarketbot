@@ -6,7 +6,7 @@ from numpy.typing import NDArray
 from numba import jit  # type: ignore
 
 
-@jit(nopython=True)
+@jit(nopython=True)  # type: ignore
 def exit_total(
     position_value: NDArray[np.float64],
     trigger: NDArray[np.int64],
@@ -40,7 +40,7 @@ def exit_total(
     return exit_value, exit_total, running_total
 
 
-@jit(nopython=True)
+@jit(nopython=True)  # type: ignore
 def take_profit(
     position_value: NDArray[Any],
     atr: NDArray[Any],
@@ -82,7 +82,7 @@ def take_profit(
     return signal.astype(np.int64), trigger.astype(np.int64)
 
 
-@jit(nopython=True)
+@jit(nopython=True)  # type: ignore
 def stop_loss(
     position_value: NDArray[Any],
     atr: NDArray[Any],
@@ -105,6 +105,8 @@ def stop_loss(
         Numpy array containing the average true range values.
     signal : NDArray[Any]
         Numpy array containing the trading signals.
+    trigger: NDArray[Any]
+        Numpy array containing the triggers.
     stop_loss_value : float
         The stop loss value as a multiplier of the atr.
 
@@ -121,8 +123,8 @@ def stop_loss(
     return signal.astype(np.int64), trigger.astype(np.int64)
 
 
-@jit(nopython=True)
-def forward_fill(arr: NDArray) -> NDArray:
+@jit(nopython=True)  # type: ignore
+def forward_fill(arr: NDArray[Any]) -> NDArray[Any]:
     """Forward fills NaN values in a 1D NumPy array.
 
     Parameters
@@ -144,9 +146,12 @@ def forward_fill(arr: NDArray) -> NDArray:
     return result
 
 
-@jit(nopython=True)
+@jit(nopython=True)  # type: ignore
 def entry_price(
-    entry: NDArray[Any], exit: NDArray[Any], signal: NDArray[Any], trigger: NDArray[Any]
+    entry: NDArray[np.float64],
+    exit: NDArray[np.float64],
+    signal: NDArray[np.int64],
+    trigger: NDArray[np.int64],
 ) -> NDArray[np.float64]:
     """Calculate the entry price for a given trading signal.
 
@@ -172,4 +177,4 @@ def entry_price(
     entry_price = forward_fill(entry_price) * internal_bit_mask
     position_value = (exit - entry_price) * internal_bit_mask
 
-    return position_value.astype(np.float64)
+    return position_value.astype(np.float64)  # type: ignore

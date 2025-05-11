@@ -24,6 +24,12 @@ from bot.exchange import (
     OandaContext,
 )
 
+FRIDAY = 4
+SATURDAY = 5
+SUNDAY = 6
+CLOSE_UTC = 21
+QUARTER_PAST = 15
+
 
 def bot_run(
     ctx: OandaContext,
@@ -87,7 +93,25 @@ def bot_run(
 
 def get_is_strict(kernel_conf: KernelConfig, trade_id: int) -> bool:
     """Get the strictness of the bot."""
-    is_strict = not (kernel_conf.edge == EdgeCategory.Fast and trade_id != -1)
+    weekday = datetime.weekday(datetime.now())
+    now = datetime.now()
+
+    # check if the exchange is closed
+    exchange_is_closed = (
+        (now.hour >= CLOSE_UTC and weekday == FRIDAY)
+        or weekday == SATURDAY
+        or (now.hour <= CLOSE_UTC and weekday == SUNDAY)
+        or (now.hour == CLOSE_UTC and now.minute <= QUARTER_PAST)
+    )
+
+    logger = logging.getLogger("bot")
+    if exchange_is_closed:
+        logger.info("exchange is closed")
+
+    is_strict = not exchange_is_closed or (
+        kernel_conf.edge == EdgeCategory.Fast and trade_id != -1
+    )
+
     return is_strict
 
 
@@ -109,9 +133,7 @@ def get_rec(kernel_conf: KernelConfig, trade_id: int, df: pd.DataFrame) -> pd.Se
         The last valid record of the DataFrame.
 
     """
-    if kernel_conf.edge == EdgeCategory.Latest:
-        rec = df.iloc[-1]
-    elif kernel_conf.edge in [EdgeCategory.Fast, EdgeCategory.Quasi]:
+    if kernel_conf.edge in [EdgeCategory.Fast, EdgeCategory.Quasi]:
         if trade_id == -1:
             rec = df.iloc[-2]
         else:
