@@ -101,8 +101,10 @@ def wma_exit_signals(
         wma_data[-1] = wma_data[-2]
 
     signals = np.where(buy_data > wma_data, 1, 0)
-    signals = np.where(exit_data < wma_data, 0, signals)
+    trigger = np.diff(signals)
+    trigger = np.concatenate((np.zeros(1), trigger))
 
+    signals = np.where((exit_data < wma_data) & (trigger != 1), 0, signals)
     trigger = np.diff(signals)
     trigger = np.concatenate((np.zeros(1), trigger))
 
