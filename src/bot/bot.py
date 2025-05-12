@@ -108,9 +108,7 @@ def get_is_strict(kernel_conf: KernelConfig, trade_id: int) -> bool:
     if exchange_is_closed:
         logger.info("exchange is closed")
 
-    is_strict = not exchange_is_closed or (
-        kernel_conf.edge == EdgeCategory.Fast and trade_id != -1
-    )
+    is_strict = not exchange_is_closed
 
     return is_strict
 
@@ -133,7 +131,7 @@ def get_rec(kernel_conf: KernelConfig, trade_id: int, df: pd.DataFrame) -> pd.Se
         The last valid record of the DataFrame.
 
     """
-    if kernel_conf.edge in [EdgeCategory.Fast, EdgeCategory.Quasi]:
+    if kernel_conf.edge == EdgeCategory.Quasi:
         if trade_id == -1:
             rec = df.iloc[-2]
         else:
@@ -227,11 +225,7 @@ def bot(
                 sconf = solver_result.kernel_conf
             last_solver_time = datetime.now()
 
-        # if fast edge, sleep
-        if trade_id != -1 and sconf.edge == EdgeCategory.Fast:
-            sleep(2)
-        else:
-            sleep_until_next_5_minute()
+        sleep_until_next_5_minute()
 
 
 def log_event(

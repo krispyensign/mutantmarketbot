@@ -22,7 +22,6 @@ class EdgeCategory(Enum):
     """Enumeration class for edge categories."""
 
     Quasi = 2
-    Fast = 3
     Deterministic = 4
 
 
@@ -49,8 +48,6 @@ class KernelConfig:
         """
         if "open" in self.signal_exit_column:
             return EdgeCategory.Quasi
-        # elif "bid_low" == self.signal_exit_column:
-        #     return EdgeCategory.Fast
         else:
             return EdgeCategory.Deterministic
 
@@ -78,8 +75,6 @@ class KernelConfig:
         """
         if self.edge == EdgeCategory.Deterministic:
             return "bid_close"
-        elif self.edge == EdgeCategory.Fast:
-            return f"wma_{self.source_column}"
         else:
             return "bid_open"
 
