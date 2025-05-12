@@ -62,8 +62,10 @@ def bot_run(
     current_time = datetime.now(tz=recent_last_time.tzinfo).replace(
         second=0, microsecond=0
     )
-    is_strict = get_is_strict(kernel_conf, trade_id)
-    if is_strict and (current_time - recent_last_time).total_seconds() > HALF_MINUTE:
+    if (
+        _is_exchange_open()
+        and (current_time - recent_last_time).total_seconds() > HALF_MINUTE
+    ):
         return (
             trade_id,
             df,
@@ -72,7 +74,7 @@ def bot_run(
 
     # place order
     try:
-        rec = get_rec(kernel_conf, trade_id, df)
+        rec = _get_rec(kernel_conf, trade_id, df)
         if rec.trigger == 1 and trade_id == -1:
             trade_id = place_market_order(
                 ctx,
@@ -91,8 +93,17 @@ def bot_run(
     return trade_id, df, None
 
 
-def get_is_strict(kernel_conf: KernelConfig, trade_id: int) -> bool:
-    """Get the strictness of the bot."""
+def _get_rec(kernel_conf, trade_id, df):
+    """Get the last row of the dataframe."""
+    return (
+        df.iloc[-1]
+        if trade_id != -1 and kernel_conf.edge == EdgeCategory.Quasi
+        else df.iloc[-2]
+    )
+
+
+def _is_exchange_open() -> bool:
+    """Check if the exchange is open."""
     weekday = datetime.weekday(datetime.now())
     now = datetime.now()
 
@@ -108,37 +119,7 @@ def get_is_strict(kernel_conf: KernelConfig, trade_id: int) -> bool:
     if exchange_is_closed:
         logger.info("exchange is closed")
 
-    is_strict = not exchange_is_closed
-
-    return is_strict
-
-
-def get_rec(kernel_conf: KernelConfig, trade_id: int, df: pd.DataFrame) -> pd.Series:
-    """Get the last valid record of the DataFrame.
-
-    Parameters
-    ----------
-    kernel_conf : KernelConfig
-        The kernel configuration.
-    trade_id : int
-        The trade ID.
-    df : pd.DataFrame
-        The DataFrame containing the trading data.
-
-    Returns
-    -------
-    pd.Series
-        The last valid record of the DataFrame.
-
-    """
-    if kernel_conf.edge == EdgeCategory.Quasi:
-        if trade_id == -1:
-            rec = df.iloc[-2]
-        else:
-            rec = df.iloc[-1]
-    else:
-        rec = df.iloc[-2]
-    return rec
+    return not exchange_is_closed
 
 
 def bot(
