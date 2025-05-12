@@ -96,19 +96,14 @@ def wma_exit_signals(
     should_roll: np.bool,
 ) -> tuple[NDArray[np.int64], NDArray[np.int64]]:
     """Calculate the weighted moving average."""
-    signals = np.zeros(len(buy_data)).astype(np.bool_)
+    signals: NDArray[np.int64] = np.zeros(len(buy_data)).astype(np.int64)
     if should_roll:
         wma_data[-1] = wma_data[-2]
-    buy_signals = np.where(buy_data > wma_data, np.True_, np.False_)
-    exit_signals = np.where(exit_data > wma_data, np.True_, np.False_)
-    for i in range(1, len(buy_signals)):
-        # apply wma
-        An1 = buy_signals[i - 1]
-        An = buy_signals[i]
-        B = exit_signals[i]
-        signals[i] = not An1 and An or An1 and B
 
-    trigger = np.diff(signals.astype(np.int64))
+    signals = np.where(buy_data > wma_data, 1, 0)
+    signals = np.where(exit_data < wma_data, 0, signals)
+
+    trigger = np.diff(signals)
     trigger = np.concatenate((np.zeros(1), trigger))
 
     return signals.astype(np.int64), trigger.astype(np.int64)
