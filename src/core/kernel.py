@@ -49,8 +49,8 @@ class KernelConfig:
         """
         if "open" in self.signal_exit_column:
             return EdgeCategory.Quasi
-        elif "bid_low" == self.signal_exit_column:
-            return EdgeCategory.Fast
+        # elif "bid_low" == self.signal_exit_column:
+        #     return EdgeCategory.Fast
         else:
             return EdgeCategory.Deterministic
 
@@ -104,7 +104,7 @@ def wma_exit_signals(
     trigger = np.diff(signals)
     trigger = np.concatenate((np.zeros(1), trigger))
 
-    signals = np.where((exit_data < wma_data) & (trigger != 1), 0, signals)
+    signals = np.where(exit_data < wma_data, 0, signals)
     trigger = np.diff(signals)
     trigger = np.concatenate((np.zeros(1), trigger))
 
