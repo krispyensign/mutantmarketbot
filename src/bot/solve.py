@@ -183,7 +183,6 @@ def _solve_run(
         kernel_conf.take_profit,
         kernel_conf.stop_loss,
         kernel_conf.signal_buy_column != kernel_conf.signal_exit_column,
-        kernel_conf.edge == EdgeCategory.Quasi,
         should_roll,
     )
 

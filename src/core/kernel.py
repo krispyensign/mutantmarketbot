@@ -130,7 +130,6 @@ def kernel_stage_1(
     take_profit_conf: np.float64,
     stop_loss_conf: np.float64,
     use_exit: np.bool,
-    erase: np.bool,
     should_roll: np.bool,
 ) -> tuple[
     NDArray[Any], NDArray[Any], NDArray[Any], NDArray[Any], NDArray[Any], NDArray[Any]
@@ -227,19 +226,6 @@ def kernel_stage_1(
             trigger,
         )
 
-    if erase:
-        for i in range(3, len(signal)):
-            if signal[i - 2] == 0 and signal[i - 1] == 1 and signal[i - 0] == 0:
-                signal[i - 1] = 0
-        trigger = np.diff(signal)
-        trigger = np.concatenate((np.zeros(1), trigger)).astype(np.int64)
-        position_value = entry_price(
-            ask_data,
-            bid_data,
-            signal,
-            trigger,
-        )
-
     exit_value = np.where(trigger == -1, position_value, 0)
     et = np.cumsum(exit_value)
     running_total = et + position_value * signal
@@ -293,7 +279,6 @@ def kernel(
         config.take_profit,
         config.stop_loss,
         config.signal_buy_column != config.signal_exit_column,
-        config.edge == EdgeCategory.Quasi,
         should_roll,
     )
 
