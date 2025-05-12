@@ -45,7 +45,6 @@ def take_profit(
     position_value: NDArray[Any],
     atr: NDArray[Any],
     signal: NDArray[Any],
-    trigger: NDArray[Any],
     take_profit_value: float,
 ) -> tuple[NDArray[np.int64], NDArray[np.int64]]:
     """Apply a take profit strategy to trading signals.
@@ -87,7 +86,6 @@ def stop_loss(
     position_value: NDArray[Any],
     atr: NDArray[Any],
     signal: NDArray[Any],
-    trigger: NDArray[Any],
     stop_loss_value: float,
 ) -> tuple[NDArray[Any], NDArray[Any]]:
     """Apply a stop loss strategy to trading signals.
