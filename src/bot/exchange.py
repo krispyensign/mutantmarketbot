@@ -165,9 +165,10 @@ def place_market_order(
     """
     logger = logging.getLogger("exchange")
     # place the order
-    decimals = 5
-    if ctx.instrument.split("_")[1] == "JPY":
-        decimals = 3
+    is_jpy = ctx.instrument.split("_")[1] == "JPY"
+    decimals = 5 if not is_jpy else 3
+    min_trailing = 0.00100 if not is_jpy else 0.100
+    trailing_distance = max(trailing_distance, min_trailing)
 
     client_extensions = v20.transaction.ClientExtensions(id=str(id), tag="mutant")
     order: v20.order.MarketOrder = v20.order.MarketOrder(
