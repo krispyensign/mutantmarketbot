@@ -184,6 +184,7 @@ def _solve_run(
         kernel_conf.stop_loss,
         kernel_conf.signal_buy_column != kernel_conf.signal_exit_column,
         should_roll,
+        kernel_conf.edge == EdgeCategory.Quasi,
     )
 
     result = _stats(exit_value, exit_total)
