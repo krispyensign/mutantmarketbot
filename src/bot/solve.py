@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta
 import subprocess
-from typing import Any
+from typing import Any, Iterator
 import numpy as np
 import pandas as pd
 import talib
@@ -256,24 +256,40 @@ def solve(
 
     # convert to dict for speed
     df = _convert_to_dict(orig_df)
+    configs, num_configs = backtest_config.get_configs(kernel_conf_in)
+    logger.info(f"total_combinations: {num_configs}")
 
+    best_result = _find_max(
+        df, configs, logger, num_configs, backtest_config, chart_config
+    )
+
+    return best_result
+
+
+def _find_max(
+    df: dict[str, NDArray[Any]],
+    configs: Iterator[KernelConfig],
+    logger: logging.Logger,
+    num_configs: int,
+    backtest_config: SolverConfig,
+    chart_config: ChartConfig,
+) -> BacktestResult | None:
     # init
     best_result: BacktestResult | None = None
-    configs, num_configs = backtest_config.get_configs(kernel_conf_in)
     total_found = 0
     count = 0
     filter_start_time = datetime.now()
-    logger.info(f"total_combinations: {num_configs}")
-
-    # run all combinations
     atr = df["atr"]
     ask = df["ask_close"]
+
+    # run all combinations
     for kernel_conf in configs:
         # log progress
         count = _log_progress(
             logger, num_configs, total_found, count, filter_start_time
         )
 
+        # filter if needed
         if (
             backtest_config.force_edge != ""
             and EdgeCategory[backtest_config.force_edge] != kernel_conf.edge
