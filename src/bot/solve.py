@@ -162,8 +162,7 @@ def _solve_run(
 ) -> tuple[np.float64, np.float64, np.int64, np.int64, np.float64] | None:
     # run the backtest
     should_roll = (
-        "open" not in kernel_conf.source_column
-        and kernel_conf.edge != EdgeCategory.Deterministic
+        kernel_conf.edge == EdgeCategory.Quasi and "open" not in kernel_conf.source_column
     )
     wma = df[f"wma_{kernel_conf.source_column}"]
     (
@@ -184,6 +183,7 @@ def _solve_run(
         kernel_conf.stop_loss,
         kernel_conf.signal_buy_column != kernel_conf.signal_exit_column,
         should_roll,
+        kernel_conf.edge != EdgeCategory.Deterministic,
     )
 
     result = _stats(exit_value, exit_total)

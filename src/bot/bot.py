@@ -12,10 +12,9 @@ from bot.common import (
     ChartConfig,
     PerfTimer,
     TradeConfig,
-    SolverConfig,
 )
 from bot.solve import get_git_info, preprocess, solve
-from core.kernel import EdgeCategory, KernelConfig, kernel
+from core.kernel import KernelConfig, kernel
 from bot.reporting import report
 from bot.exchange import (
     close_trade,
@@ -38,8 +37,6 @@ def bot_run(
     chart_conf: ChartConfig,
     trade_conf: TradeConfig,
     backtest_only: bool = False,
-    sl: float = 0.0,
-    tp: float = 0.0,
 ) -> tuple[int, pd.DataFrame | None, Exception | None]:
     """Run the bot."""
     # get open trades and candles
@@ -55,14 +52,20 @@ def bot_run(
 
     # run kernel on candles
     recent_last_time = datetime.fromisoformat(df.iloc[-1]["timestamp"])
-    df = kernel(df, config=kernel_conf)
+    tkernel_conf = KernelConfig(
+        kernel_conf.signal_buy_column,
+        kernel_conf.signal_exit_column,
+        kernel_conf.source_column,
+        kernel_conf.wma_period,
+    )
+    df = kernel(df, config=tkernel_conf)
 
     # backtest only and do not trade
     if backtest_only:
         logger = logging.getLogger("bot")
-        rec = _get_rec(kernel_conf, trade_id, df)
-        logger.info("trailing distance: %s", min(sl * rec.atr, 0.00100))
-        logger.info("take profit: %s", round(tp * rec.atr + rec.bid_close, 5))
+        rec = df.iloc[-1]
+        logger.info("trailing distance: %s", min(kernel_conf.stop_loss * rec.atr, 0.00100))
+        logger.info("take profit: %s", round(kernel_conf.take_profit * rec.atr + rec.bid_close, 5))
 
         return trade_id, df, None
 
@@ -82,14 +85,14 @@ def bot_run(
 
     # place order
     try:
-        rec = _get_rec(kernel_conf, trade_id, df)
+        rec = df.iloc[-1]
         if rec.trigger == 1 and trade_id == -1:
             trade_id = place_market_order(
                 ctx,
                 trade_conf.amount,
                 trade_conf.bot_id,
-                trailing_distance=sl * rec.atr,
-                take_profit=tp * rec.atr + rec.bid_close,
+                trailing_distance=kernel_conf.stop_loss * rec.atr,
+                take_profit=kernel_conf * rec.atr + rec.bid_close,
             )
         # close order
         elif (rec.trigger == -1 and trade_id != -1) or (
@@ -101,15 +104,6 @@ def bot_run(
         return trade_id, df, err
 
     return trade_id, df, None
-
-
-def _get_rec(kernel_conf, trade_id, df):
-    """Get the last row of the dataframe."""
-    return (
-        df.iloc[-1]
-        if trade_id != -1 and kernel_conf.edge == EdgeCategory.Quasi
-        else df.iloc[-2]
-    )
 
 
 def _is_exchange_open() -> bool:
@@ -157,7 +151,7 @@ def bot(
         return None
 
     # run solver
-    sconf, sl, tp = _solve_staged(oanda_ctx, bot_conf, logger)
+    sconf = _solve(oanda_ctx, bot_conf, logger)
     last_solver_time = datetime.now()
 
     if not bot_conf.backtest_only:
@@ -175,8 +169,6 @@ def bot(
                 chart_conf=bot_conf.chart_conf,
                 trade_conf=bot_conf.trade_conf,
                 backtest_only=bot_conf.backtest_only,
-                sl=sl,
-                tp=tp,
             )
         if err is not None:
             logger.error(err)
@@ -193,63 +185,29 @@ def bot(
             and (datetime.now() - last_solver_time).total_seconds()
             > bot_conf.solver_conf.solver_interval
         ):
-            sconf, sl, tp = _solve_staged(oanda_ctx, bot_conf, logger)
+            sconf = _solve(oanda_ctx, bot_conf, logger, sconf)
             last_solver_time = datetime.now()
 
         sleep_until_next_5_minute()
 
 
-def _solve_staged(
-    oanda_ctx: OandaContext, bot_conf: BotConfig, logger: logging.Logger
-) -> tuple[KernelConfig, float, float]:
-    # calculate without tp/sl
+def _solve(
+    oanda_ctx: OandaContext, bot_conf: BotConfig, logger: logging.Logger, kernel_conf: KernelConfig | None = None
+) -> KernelConfig:
+    kconf = kernel_conf if kernel_conf is not None else bot_conf.kernel_conf
     solver_result_stage1 = solve(
         bot_conf.chart_conf,
-        bot_conf.kernel_conf,
+        kconf,
         oanda_ctx.token,
-        SolverConfig(
-            take_profit=[0.0],
-            stop_loss=[0.0],
-            source_columns=bot_conf.solver_conf.source_columns,
-        ),
+        bot_conf.solver_conf,
     )
     if solver_result_stage1 is None:
         logger.error("failed to solve.")
-        return (
-            bot_conf.kernel_conf,
-            bot_conf.kernel_conf.stop_loss,
-            bot_conf.kernel_conf.take_profit,
-        )
+        return bot_conf.kernel_conf
     else:
         logger.info("selected %s", solver_result_stage1.kernel_conf)
 
-    # calculate with tp/sl once a config is selected
-    solver_result_stage2 = solve(
-        bot_conf.chart_conf,
-        solver_result_stage1.kernel_conf,
-        oanda_ctx.token,
-        SolverConfig(
-            take_profit=bot_conf.solver_conf.take_profit,
-            stop_loss=bot_conf.solver_conf.stop_loss,
-            source_columns=[],
-        ),
-    )
-    if solver_result_stage2 is None:
-        logger.error("failed to solve.")
-        return (
-            solver_result_stage1.kernel_conf,
-            bot_conf.kernel_conf.stop_loss,
-            bot_conf.kernel_conf.take_profit,
-        )
-    else:
-        logger.info("selected %s", solver_result_stage2.kernel_conf)
-
-    # return the selected stage 1 config and stage 2 tp/sl
-    return (
-        solver_result_stage1.kernel_conf,
-        solver_result_stage2.kernel_conf.stop_loss,
-        solver_result_stage2.kernel_conf.take_profit,
-    )
+    return solver_result_stage1.kernel_conf
 
 
 def log_event(
