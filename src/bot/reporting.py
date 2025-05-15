@@ -34,6 +34,7 @@ def report(
             "trigger",
             "atr",
             "wma",
+            "bid_high",
             kernel_conf.signal_buy_column,
             kernel_conf.signal_exit_column,
             kernel_conf.ask_column,
