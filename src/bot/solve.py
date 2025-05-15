@@ -240,13 +240,12 @@ def solve(
     printed to the log file.
 
     """
-    logger = logging.getLogger("backtest")
+    logger = logging.getLogger("solve")
     logger.info("starting backtest")
     git_info = get_git_info()
     if type(git_info) is not tuple:
         logger.error("failed to get git info: %s", git_info)
         return None
-
     logger.info("git info: %s %s", git_info[0], git_info[1])
 
     # get data and preprocess
@@ -264,6 +263,39 @@ def solve(
     )
 
     return best_result
+
+
+def segmented_solve(
+    chart_config: ChartConfig,
+    kernel_conf_in: KernelConfig,
+    token: str,
+    backtest_config: SolverConfig,
+) -> bool:
+    logger = logging.getLogger("backtest")
+    logger.info("starting backtest")
+    git_info = get_git_info()
+    if type(git_info) is not tuple:
+        logger.error("failed to get git info: %s", git_info)
+        return False
+    logger.info("git info: %s %s", git_info[0], git_info[1])
+    
+    # get data and preprocess
+    orig_df = preprocess(
+        _get_data(chart_config, token, logger), kernel_conf_in.wma_period
+    )
+
+    num_segments = orig_df.shape[0] // 300
+    for i in range(num_segments):
+        sliced_df = orig_df.iloc[i * 1000 : (i + 1) * 1000]
+        df = _convert_to_dict(sliced_df)
+        configs, num_configs = backtest_config.get_configs(kernel_conf_in)
+        logger.info(f"total_combinations: {num_configs}")
+
+        _find_max(
+            df, configs, logger, num_configs, backtest_config, chart_config
+        )
+
+    return False
 
 
 def _find_max(
