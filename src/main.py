@@ -59,6 +59,7 @@ if __name__ == "__main__":
             token=TOKEN,
             account_id=ACCOUNT_ID,
         )
+        chart_conf.candle_count = solver_conf.sample_size + solver_conf.train_size
 
         # setup logging
         logging_conf = conf["logging"]

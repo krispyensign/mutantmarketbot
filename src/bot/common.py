@@ -43,7 +43,8 @@ class SolverConfig:
     source_columns: list[str]
     solver_interval: int = 3600
     force_edge: str = ""
-    full_candle_count: int = 5000
+    sample_size: int = 100
+    train_size: int = 80
 
     def get_configs(
         self, kernel_conf: KernelConfig

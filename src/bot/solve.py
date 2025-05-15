@@ -287,8 +287,8 @@ def segmented_solve(
     )
 
     # last 10% of orig_df is a sample segment, the first 90% is the training data
-    orig_df_train = orig_df.head(int(orig_df.shape[0] * 0.8))
-    orig_df_sample = orig_df.tail(int(orig_df.shape[0] * 0.2))
+    orig_df_train = orig_df.head(backtest_config.train_size)
+    orig_df_sample = orig_df.tail(backtest_config.sample_size)
 
     # convert to dict for speed
     df_train = _convert_to_dict(orig_df_train)
@@ -313,7 +313,7 @@ def segmented_solve(
         report(df, chart_config.instrument, best_result.kernel_conf, 20)
         rec = df.iloc[-1]
         logger.info("et:%s rt:%s", round(rec.exit_total,5), round(rec.running_total,5))
-        return rec.exit_total > 0.0 or rec.running_total > 0.0
+        return rec.exit_total > 0.0
 
     return False
 
