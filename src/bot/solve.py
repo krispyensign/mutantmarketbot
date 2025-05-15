@@ -11,8 +11,9 @@ from numba import jit  # type: ignore
 from bot.common import BacktestResult, ChartConfig, SolverConfig
 from core.chart import heiken_ashi_numpy
 from numpy.typing import NDArray
+from bot.reporting import report
 
-from core.kernel import EdgeCategory, KernelConfig, kernel_stage_1
+from core.kernel import EdgeCategory, KernelConfig, kernel_stage_1, kernel
 from bot.exchange import (
     getOandaOHLC,
     OandaContext,
@@ -271,6 +272,7 @@ def segmented_solve(
     token: str,
     backtest_config: SolverConfig,
 ) -> bool:
+    """Run a backtest of the trading strategy."""
     logger = logging.getLogger("backtest")
     logger.info("starting backtest")
     git_info = get_git_info()
@@ -284,16 +286,34 @@ def segmented_solve(
         _get_data(chart_config, token, logger), kernel_conf_in.wma_period
     )
 
-    num_segments = orig_df.shape[0] // 300
-    for i in range(num_segments):
-        sliced_df = orig_df.iloc[i * 1000 : (i + 1) * 1000]
-        df = _convert_to_dict(sliced_df)
-        configs, num_configs = backtest_config.get_configs(kernel_conf_in)
-        logger.info(f"total_combinations: {num_configs}")
+    # last 10% of orig_df is a sample segment, the first 90% is the training data
+    orig_df_train = orig_df.head(int(orig_df.shape[0] * 0.8))
+    orig_df_sample = orig_df.tail(int(orig_df.shape[0] * 0.2))
 
-        _find_max(
-            df, configs, logger, num_configs, backtest_config, chart_config
-        )
+    # convert to dict for speed
+    df_train = _convert_to_dict(orig_df_train)
+
+    # convert to dict for speed
+    configs, num_configs = backtest_config.get_configs(kernel_conf_in)
+    logger.info(f"total_combinations: {num_configs}")
+
+    best_result = _find_max(
+        df_train, configs, logger, num_configs, backtest_config, chart_config
+    )
+
+    if best_result is None:
+        logger.error("failed to find best result")
+        return False
+
+    if best_result is not None:
+        logger.info("best result: %s", best_result)
+    
+    df = kernel(orig_df_sample.copy(), config=best_result.kernel_conf)
+    if df is not None:
+        report(df, chart_config.instrument, best_result.kernel_conf, 20)
+        rec = df.iloc[-1]
+        logger.info("et: %s rt:%s", rec.exit_total, rec.running_total)
+        return rec.exit_total > 0.0 or rec.running_total > 0.0
 
     return False
 
