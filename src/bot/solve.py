@@ -312,7 +312,7 @@ def segmented_solve(
     if df is not None:
         report(df, chart_config.instrument, best_result.kernel_conf, 20)
         rec = df.iloc[-1]
-        logger.info("et:%s rt:%s", rec.exit_total, rec.running_total)
+        logger.info("et:%s rt:%s", round(rec.exit_total,5), round(rec.running_total,5))
         return rec.exit_total > 0.0 or rec.running_total > 0.0
 
     return False
