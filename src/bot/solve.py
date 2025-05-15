@@ -292,6 +292,7 @@ def segmented_solve(
 
     # convert to dict for speed
     df_train = _convert_to_dict(orig_df_train)
+    df_sample = _convert_to_dict(orig_df_sample)
 
     # convert to dict for speed
     configs, num_configs = backtest_config.get_configs(kernel_conf_in)
@@ -308,12 +309,18 @@ def segmented_solve(
     if best_result is not None:
         logger.info("best result: %s", best_result)
     
-    df = kernel(orig_df_sample.copy(), config=best_result.kernel_conf)
-    if df is not None:
-        report(df, chart_config.instrument, best_result.kernel_conf, 20)
-        rec = df.iloc[-1]
-        logger.info("et:%s rt:%s", round(rec.exit_total,5), round(rec.running_total,5))
-        return rec.exit_total > 0.0
+    next_configs, next_num_configs = backtest_config.get_configs(best_result.kernel_conf)
+    next_result = _find_max(
+        df_sample, next_configs, logger, next_num_configs, backtest_config, chart_config
+    )
+
+    if next_result is None:
+        logger.error("failed to find next best result")
+        return False
+
+    if next_result is not None:
+        logger.info("next best result: %s", next_result)
+        return True
 
     return False
 
@@ -359,7 +366,7 @@ def _find_max(
         if (
             best_result is None
             or (ratio >= best_result.ratio)
-            and (et >= best_result.exit_total)
+            and (et > best_result.exit_total)
         ):
             best_result = BacktestResult(
                 chart_config.instrument,
