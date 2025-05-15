@@ -16,7 +16,7 @@ from bot.common import (
     SolverConfig,
     TradeConfig,
 )
-from bot.solve import solve
+from bot.solve import segmented_solve
 from bot.bot import bot
 from core.kernel import KernelConfig
 import os
@@ -59,6 +59,7 @@ if __name__ == "__main__":
             token=TOKEN,
             account_id=ACCOUNT_ID,
         )
+        chart_conf.candle_count = solver_conf.sample_size + solver_conf.train_size
 
         # setup logging
         logging_conf = conf["logging"]
@@ -79,7 +80,7 @@ if __name__ == "__main__":
 
         # run
         with PerfTimer(start_time, logger):
-            result = solve(chart_conf, kernel_conf, TOKEN, solver_conf)
+            result = segmented_solve(chart_conf, kernel_conf, TOKEN, solver_conf)
         if result is None:
             sys.exit(1)
 

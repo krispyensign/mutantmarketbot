@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta
 import subprocess
-from typing import Any
+from typing import Any, Iterator
 import numpy as np
 import pandas as pd
 import talib
@@ -11,8 +11,9 @@ from numba import jit  # type: ignore
 from bot.common import BacktestResult, ChartConfig, SolverConfig
 from core.chart import heiken_ashi_numpy
 from numpy.typing import NDArray
+from bot.reporting import report
 
-from core.kernel import EdgeCategory, KernelConfig, kernel_stage_1
+from core.kernel import EdgeCategory, KernelConfig, kernel_stage_1, kernel
 from bot.exchange import (
     getOandaOHLC,
     OandaContext,
@@ -240,13 +241,12 @@ def solve(
     printed to the log file.
 
     """
-    logger = logging.getLogger("backtest")
+    logger = logging.getLogger("solve")
     logger.info("starting backtest")
     git_info = get_git_info()
     if type(git_info) is not tuple:
         logger.error("failed to get git info: %s", git_info)
         return None
-
     logger.info("git info: %s %s", git_info[0], git_info[1])
 
     # get data and preprocess
@@ -256,24 +256,99 @@ def solve(
 
     # convert to dict for speed
     df = _convert_to_dict(orig_df)
+    configs, num_configs = backtest_config.get_configs(kernel_conf_in)
+    logger.info(f"total_combinations: {num_configs}")
 
+    best_result = _find_max(
+        df, configs, logger, num_configs, backtest_config, chart_config
+    )
+
+    return best_result
+
+
+def segmented_solve(
+    chart_config: ChartConfig,
+    kernel_conf_in: KernelConfig,
+    token: str,
+    backtest_config: SolverConfig,
+) -> bool:
+    """Run a backtest of the trading strategy."""
+    logger = logging.getLogger("backtest")
+    logger.info("starting backtest")
+    git_info = get_git_info()
+    if type(git_info) is not tuple:
+        logger.error("failed to get git info: %s", git_info)
+        return False
+    logger.info("git info: %s %s", git_info[0], git_info[1])
+    
+    # get data and preprocess
+    orig_df = preprocess(
+        _get_data(chart_config, token, logger), kernel_conf_in.wma_period
+    )
+
+    # last 10% of orig_df is a sample segment, the first 90% is the training data
+    orig_df_train = orig_df.head(backtest_config.train_size)
+    orig_df_sample = orig_df.tail(backtest_config.sample_size)
+
+    # convert to dict for speed
+    df_train = _convert_to_dict(orig_df_train)
+    df_sample = _convert_to_dict(orig_df_sample)
+
+    # convert to dict for speed
+    configs, num_configs = backtest_config.get_configs(kernel_conf_in)
+    logger.info(f"total_combinations: {num_configs}")
+
+    best_result = _find_max(
+        df_train, configs, logger, num_configs, backtest_config, chart_config
+    )
+
+    if best_result is None:
+        logger.error("failed to find best result")
+        return False
+
+    if best_result is not None:
+        logger.info("best result: %s", best_result)
+    
+    next_configs, next_num_configs = backtest_config.get_configs(best_result.kernel_conf)
+    next_result = _find_max(
+        df_sample, next_configs, logger, next_num_configs, backtest_config, chart_config
+    )
+
+    if next_result is None:
+        logger.error("failed to find next best result")
+        return False
+
+    if next_result is not None:
+        logger.info("next best result: %s", next_result)
+        return True
+
+    return False
+
+
+def _find_max(
+    df: dict[str, NDArray[Any]],
+    configs: Iterator[KernelConfig],
+    logger: logging.Logger,
+    num_configs: int,
+    backtest_config: SolverConfig,
+    chart_config: ChartConfig,
+) -> BacktestResult | None:
     # init
     best_result: BacktestResult | None = None
-    configs, num_configs = backtest_config.get_configs(kernel_conf_in)
     total_found = 0
     count = 0
     filter_start_time = datetime.now()
-    logger.info(f"total_combinations: {num_configs}")
-
-    # run all combinations
     atr = df["atr"]
     ask = df["ask_close"]
+
+    # run all combinations
     for kernel_conf in configs:
         # log progress
         count = _log_progress(
             logger, num_configs, total_found, count, filter_start_time
         )
 
+        # filter if needed
         if (
             backtest_config.force_edge != ""
             and EdgeCategory[backtest_config.force_edge] != kernel_conf.edge
@@ -291,7 +366,7 @@ def solve(
         if (
             best_result is None
             or (ratio >= best_result.ratio)
-            and (et >= best_result.exit_total)
+            and (et > best_result.exit_total)
         ):
             best_result = BacktestResult(
                 chart_config.instrument,

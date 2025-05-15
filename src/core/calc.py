@@ -46,6 +46,7 @@ def take_profit(
     atr: NDArray[Any],
     signal: NDArray[Any],
     take_profit_value: float,
+    trigger: NDArray[Any],
 ) -> tuple[NDArray[np.int64], NDArray[np.int64]]:
     """Apply a take profit strategy to trading signals.
 
@@ -75,7 +76,7 @@ def take_profit(
 
     """
     take_profit_array = take_profit_value * atr
-    signal = np.where(position_value > take_profit_array, 0, signal)
+    signal = np.where((position_value > take_profit_array) & (trigger != 1), 0, signal)
     trigger = np.diff(signal)
     trigger = np.concatenate((np.zeros(1), trigger))
     return signal.astype(np.int64), trigger.astype(np.int64)
@@ -87,6 +88,7 @@ def stop_loss(
     atr: NDArray[Any],
     signal: NDArray[Any],
     stop_loss_value: float,
+    trigger: NDArray[Any],
 ) -> tuple[NDArray[Any], NDArray[Any]]:
     """Apply a stop loss strategy to trading signals.
 
@@ -115,7 +117,7 @@ def stop_loss(
 
     """
     stop_loss_array = -stop_loss_value * atr
-    signal = np.where(position_value < stop_loss_array, 0, signal)
+    signal = np.where((position_value < stop_loss_array) & (trigger != 1), 0, signal)
     trigger = np.diff(signal)
     trigger = np.concatenate((np.zeros(1), trigger))
     return signal.astype(np.int64), trigger.astype(np.int64)
