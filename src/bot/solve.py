@@ -315,14 +315,17 @@ def segmented_solve(
     )
 
     if next_result is None:
+        df = kernel(orig_df_sample.copy(), best_result.kernel_conf)
+        report(df, best_result.instrument, best_result.kernel_conf, length=20)
         logger.error("failed to find next best result")
         return False
 
-    if next_result is not None:
-        logger.info("next best result: %s", next_result)
-        return True
+    else:
+        df = kernel(orig_df_sample.copy(), next_result.kernel_conf)
+        report(df, best_result.instrument, next_result.kernel_conf, length=20)
 
-    return False
+    logger.info("next best result: %s", next_result)
+    return True
 
 
 def _find_max(
@@ -366,7 +369,7 @@ def _find_max(
         if (
             best_result is None
             or (ratio >= best_result.ratio)
-            and (et > best_result.exit_total)
+            and (et >= best_result.exit_total)
         ):
             best_result = BacktestResult(
                 chart_config.instrument,
