@@ -45,7 +45,10 @@ def getOandaBalance(ctx: OandaContext) -> float:
 
 
 def getOandaOHLC(
-    ctx: OandaContext, granularity: str = "M5", count: int = 288, fromTime: datetime | None = None
+    ctx: OandaContext,
+    granularity: str = "M5",
+    count: int = 288,
+    fromTime: datetime | None = None,
 ) -> pd.DataFrame:
     # create dataframe with candles
     """Get OHLC data from Oanda and convert it into a pandas DataFrame.

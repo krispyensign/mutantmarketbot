@@ -280,7 +280,7 @@ def segmented_solve(
         logger.error("failed to get git info: %s", git_info)
         return False
     logger.info("git info: %s %s", git_info[0], git_info[1])
-    
+
     # get data and preprocess
     orig_df = preprocess(
         _get_data(chart_config, token, logger), kernel_conf_in.wma_period
@@ -308,8 +308,10 @@ def segmented_solve(
 
     if best_result is not None:
         logger.info("best result: %s", best_result)
-    
-    next_configs, next_num_configs = backtest_config.get_configs(best_result.kernel_conf)
+
+    next_configs, next_num_configs = backtest_config.get_configs(
+        best_result.kernel_conf
+    )
     next_result = _find_max(
         df_sample, next_configs, logger, next_num_configs, backtest_config, chart_config
     )
@@ -449,7 +451,10 @@ def _get_data(
     )
 
     orig_df = getOandaOHLC(
-        ctx, count=chart_config.candle_count, granularity=chart_config.granularity, fromTime=chart_config.date_from
+        ctx,
+        count=chart_config.candle_count,
+        granularity=chart_config.granularity,
+        fromTime=chart_config.date_from,
     )
     logger.info(
         "count: %s granularity: %s",
