@@ -1,6 +1,7 @@
 """Backtest the trading strategy."""
 
 from datetime import datetime, timedelta
+import itertools
 import subprocess
 from typing import Any, Iterator
 import numpy as np
@@ -291,57 +292,83 @@ def segmented_solve(
 
     # last 10% of orig_df is a sample segment, the first 90% is the training data
     orig_df_train = orig_df.head(backtest_config.train_size)
+    orig_df_tp_train = orig_df_train.tail(backtest_config.sample_size)
     orig_df_sample = orig_df.tail(backtest_config.sample_size)
     orig_vdf_train = verifier_df.head(backtest_config.train_size)
+    orig_vdf_tp_train = verifier_df.tail(backtest_config.sample_size)
     orig_vdf_sample = verifier_df.tail(backtest_config.sample_size)
 
     # convert to dict for speed
     df_train = _convert_to_dict(orig_df_train)
+    df_tp_train = _convert_to_dict(orig_df_tp_train)
     vdf_train = _convert_to_dict(orig_vdf_train)
+    vdf_tp_train = _convert_to_dict(orig_vdf_tp_train)
 
     # convert to dict for speed
     configs, num_configs = backtest_config.get_configs(kernel_conf_in)
+    bconfigs, vconfigs = itertools.tee(configs)
     logger.info(f"total_combinations: {num_configs}")
 
+
     best_result = _find_max(
-        df_train, configs, logger, num_configs, backtest_config, chart_config
+        df_train, bconfigs, logger, num_configs, backtest_config, chart_config
     )
+    next_result: BacktestResult | None = None
     if best_result is None:
         logger.error("failed to find best result")
-        return False
-
-    if best_result is not None:
+    else:
         logger.info("best result: %s", best_result)
+        next_configs, next_num_configs = backtest_config.get_configs(best_result.kernel_conf)
+        next_result = _find_max(
+            df_tp_train, next_configs, logger, next_num_configs, backtest_config, chart_config
+        )
+        if next_result is not None:
+            logger.info("next result: %s", next_result)
+        else:
+            logger.error("failed to find next result")
 
     vbest_result = _find_max(
-        vdf_train, configs, logger, num_configs, backtest_config, chart_config
+        vdf_train, vconfigs, logger, num_configs, backtest_config, chart_config
     )
+    next_vresult: BacktestResult | None = None
     if vbest_result is None:
         logger.error("failed to find verifier best result")
+    else:
+        logger.info("verifier best result: %s", vbest_result)
+        next_configs, next_num_configs = backtest_config.get_configs(vbest_result.kernel_conf)
+        next_vresult = _find_max(
+            vdf_tp_train, next_configs, logger, next_num_configs, backtest_config, chart_config
+        )
+        if next_vresult is not None:
+            logger.info("verifier next result: %s", next_vresult)
+        else:
+            logger.error("failed to find verifier next result")
+
+    if vbest_result is None and best_result is None:
         return False
 
-    if vbest_result is not None:
-        logger.info("verifier best result: %s", vbest_result)
+    bet = 0.0
+    if best_result is not None and next_result is None:
+        df = kernel(orig_df_sample.copy(), best_result.kernel_conf)
+        rec = df.iloc[-1]
+        bet = rec.exit_total
+    elif best_result is not None and next_result is not None:
+        df = kernel(orig_df_sample.copy(), next_result.kernel_conf)
+        rec = df.iloc[-1]
+        bet = rec.exit_total
 
-    # next_configs, next_num_configs = backtest_config.get_configs(
-    #     best_result.kernel_conf
-    # )
-    # next_result = _find_max(
-    #     df_sample, next_configs, logger, next_num_configs, backtest_config, chart_config
-    # )
+    vet = 0.0
+    if vbest_result is not None and next_vresult is None:
+        vdf = kernel(orig_vdf_sample.copy(), vbest_result.kernel_conf)
+        vrec = vdf.iloc[-1]
+        vet = vrec.exit_total
+    elif vbest_result is not None and next_vresult is not None:
+        vdf = kernel(orig_vdf_sample.copy(), next_vresult.kernel_conf)
+        vrec = vdf.iloc[-1]
+        vet = vrec.exit_total
+    logger.info("et: %s vet: %s t:%s", round(bet, 5), round(vet, 5), round(bet + vet, 5))
 
-    # if next_result is None:
-    df = kernel(orig_df_sample.copy(), best_result.kernel_conf)
-    vdf = kernel(orig_vdf_sample.copy(), vbest_result.kernel_conf)
-    rec = df.iloc[-1]
-    vrec = vdf.iloc[-1]
-    logger.info("et: %s vet: %s t:%s", rec.exit_total, vrec.exit_total, rec.exit_total + vrec.exit_total)
-    # else:
-    # df = kernel(orig_df_sample.copy(), next_result.kernel_conf)
-    # report(df, best_result.instrument, next_result.kernel_conf, length=20)
-
-    # logger.info("next best result: %s", next_result)
-    return rec.exit_total + vrec.exit_total > 0
+    return bet + vet > 0
 
 
 def _find_max(
