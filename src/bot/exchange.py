@@ -1,5 +1,6 @@
 """Get OHLC data from an exchange and convert it into a pandas DataFrame."""
 
+from datetime import datetime
 import uuid
 import v20  # type: ignore
 import pandas as pd
@@ -44,7 +45,7 @@ def getOandaBalance(ctx: OandaContext) -> float:
 
 
 def getOandaOHLC(
-    ctx: OandaContext, granularity: str = "M5", count: int = 288
+    ctx: OandaContext, granularity: str = "M5", count: int = 288, fromTime: datetime | None = None
 ) -> pd.DataFrame:
     # create dataframe with candles
     """Get OHLC data from Oanda and convert it into a pandas DataFrame.
@@ -53,12 +54,12 @@ def getOandaOHLC(
     ----------
     ctx : OandaContext
         The Oanda API context.
-    instrument : str
-        The instrument to get the OHLC data for.
     granularity : str, optional
         The granularity of the OHLC data, by default "M5".
     count : int, optional
         The number of candles to get, by default 288.
+    fromTime : str, optional
+        The start time of the candles, by default None.
 
     Returns
     -------
@@ -99,12 +100,21 @@ def getOandaOHLC(
         ]
     )
 
-    resp = ctx.ctx.instrument.candles(
-        instrument=ctx.instrument,
-        granularity=granularity,
-        price="MAB",
-        count=count,
-    )
+    if fromTime is None:
+        resp = ctx.ctx.instrument.candles(
+            instrument=ctx.instrument,
+            granularity=granularity,
+            price="MAB",
+            count=count,
+        )
+    else:
+        resp = ctx.ctx.instrument.candles(
+            instrument=ctx.instrument,
+            granularity=granularity,
+            price="MAB",
+            count=count,
+            fromTime=fromTime.timestamp(),
+        )
     IsOK(resp)
 
     if "candles" not in resp.body:
@@ -214,7 +224,7 @@ def IsOK(resp: v20.Response) -> None:
         raise Exception("No response body")
     if resp.status not in OK:
         if "errorMessage" in resp.body:
-            raise Exception(resp.body["errorCode"] + ":" + resp.body["errorMessage"])
+            raise Exception(resp.body["errorMessage"])
         else:
             raise Exception("unhandled response")
 

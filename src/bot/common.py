@@ -31,7 +31,7 @@ class ChartConfig:
     instrument: str
     granularity: str
     candle_count: int
-    datefrom: datetime | None = None
+    date_from: datetime | None = None
 
 
 @dataclass

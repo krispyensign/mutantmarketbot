@@ -449,7 +449,7 @@ def _get_data(
     )
 
     orig_df = getOandaOHLC(
-        ctx, count=chart_config.candle_count, granularity=chart_config.granularity
+        ctx, count=chart_config.candle_count, granularity=chart_config.granularity, fromTime=chart_config.date_from
     )
     logger.info(
         "count: %s granularity: %s",
