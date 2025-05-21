@@ -12,7 +12,6 @@ from numba import jit  # type: ignore
 from bot.common import BacktestResult, ChartConfig, SolverConfig
 from core.chart import heiken_ashi_numpy
 from numpy.typing import NDArray
-from bot.reporting import report
 
 from core.kernel import EdgeCategory, KernelConfig, kernel_stage_1, kernel
 from bot.exchange import (
@@ -206,7 +205,9 @@ def _stats(
 
     wins: np.int64 = np.where(exit_value > 0, 1, 0).astype(np.int64).sum()
     losses: np.int64 = np.where(exit_value < 0, 1, 0).astype(np.int64).sum()
-    ratio = np.float64(wins / (wins + losses)) if (wins + losses) > 0 else np.float64(0.0)
+    ratio = (
+        np.float64(wins / (wins + losses)) if (wins + losses) > 0 else np.float64(0.0)
+    )
 
     return final_total, min_total, wins, losses, ratio
 
@@ -287,7 +288,8 @@ def segmented_solve(
         _get_data(chart_config, token, logger), kernel_conf_in.wma_period
     )
     verifier_df = preprocess(
-        _get_data(chart_config, token, logger, chart_config.verifier), kernel_conf_in.wma_period
+        _get_data(chart_config, token, logger, chart_config.verifier),
+        kernel_conf_in.wma_period,
     )
 
     # last 10% of orig_df is a sample segment, the first 90% is the training data
@@ -309,7 +311,6 @@ def segmented_solve(
     bconfigs, vconfigs = itertools.tee(configs)
     logger.info(f"total_combinations: {num_configs}")
 
-
     best_result = _find_max(
         df_train, bconfigs, logger, num_configs, backtest_config, chart_config
     )
@@ -318,9 +319,16 @@ def segmented_solve(
         logger.error("failed to find best result")
     else:
         logger.info("best result: %s", best_result)
-        next_configs, next_num_configs = backtest_config.get_configs(best_result.kernel_conf)
+        next_configs, next_num_configs = backtest_config.get_configs(
+            best_result.kernel_conf
+        )
         next_result = _find_max(
-            df_tp_train, next_configs, logger, next_num_configs, backtest_config, chart_config
+            df_tp_train,
+            next_configs,
+            logger,
+            next_num_configs,
+            backtest_config,
+            chart_config,
         )
         if next_result is not None:
             logger.info("next result: %s", next_result)
@@ -335,9 +343,16 @@ def segmented_solve(
         logger.error("failed to find verifier best result")
     else:
         logger.info("verifier best result: %s", vbest_result)
-        next_configs, next_num_configs = backtest_config.get_configs(vbest_result.kernel_conf)
+        next_configs, next_num_configs = backtest_config.get_configs(
+            vbest_result.kernel_conf
+        )
         next_vresult = _find_max(
-            vdf_tp_train, next_configs, logger, next_num_configs, backtest_config, chart_config
+            vdf_tp_train,
+            next_configs,
+            logger,
+            next_num_configs,
+            backtest_config,
+            chart_config,
         )
         if next_vresult is not None:
             logger.info("verifier next result: %s", next_vresult)
@@ -366,7 +381,9 @@ def segmented_solve(
         vdf = kernel(orig_vdf_sample.copy(), next_vresult.kernel_conf)
         vrec = vdf.iloc[-1]
         vet = vrec.exit_total
-    logger.info("et: %s vet: %s t:%s", round(bet, 5), round(vet, 5), round(bet + vet, 5))
+    logger.info(
+        "et: %s vet: %s t:%s", round(bet, 5), round(vet, 5), round(bet + vet, 5)
+    )
 
     return bet + vet > 0
 
