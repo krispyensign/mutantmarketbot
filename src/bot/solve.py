@@ -205,7 +205,7 @@ def _stats(
 
     wins: np.int64 = np.where(exit_value > 0, 1, 0).astype(np.int64).sum()
     losses: np.int64 = np.where(exit_value < 0, 1, 0).astype(np.int64).sum()
-    ratio = np.float64(wins / (wins + losses))
+    ratio = np.float64(wins / (wins + losses)) if (wins + losses) > 0 else np.float64(0.0)
 
     return final_total, min_total, wins, losses, ratio
 
@@ -285,14 +285,19 @@ def segmented_solve(
     orig_df = preprocess(
         _get_data(chart_config, token, logger), kernel_conf_in.wma_period
     )
+    verifier_df = preprocess(
+        _get_data(chart_config, token, logger, chart_config.verifier), kernel_conf_in.wma_period
+    )
 
     # last 10% of orig_df is a sample segment, the first 90% is the training data
     orig_df_train = orig_df.head(backtest_config.train_size)
     orig_df_sample = orig_df.tail(backtest_config.sample_size)
+    orig_vdf_train = verifier_df.head(backtest_config.train_size)
+    orig_vdf_sample = verifier_df.tail(backtest_config.sample_size)
 
     # convert to dict for speed
     df_train = _convert_to_dict(orig_df_train)
-    df_sample = _convert_to_dict(orig_df_sample)
+    vdf_train = _convert_to_dict(orig_vdf_train)
 
     # convert to dict for speed
     configs, num_configs = backtest_config.get_configs(kernel_conf_in)
@@ -301,7 +306,6 @@ def segmented_solve(
     best_result = _find_max(
         df_train, configs, logger, num_configs, backtest_config, chart_config
     )
-
     if best_result is None:
         logger.error("failed to find best result")
         return False
@@ -309,25 +313,35 @@ def segmented_solve(
     if best_result is not None:
         logger.info("best result: %s", best_result)
 
-    next_configs, next_num_configs = backtest_config.get_configs(
-        best_result.kernel_conf
+    vbest_result = _find_max(
+        vdf_train, configs, logger, num_configs, backtest_config, chart_config
     )
-    next_result = _find_max(
-        df_sample, next_configs, logger, next_num_configs, backtest_config, chart_config
-    )
-
-    if next_result is None:
-        df = kernel(orig_df_sample.copy(), best_result.kernel_conf)
-        report(df, best_result.instrument, best_result.kernel_conf, length=20)
-        logger.error("failed to find next best result")
+    if vbest_result is None:
+        logger.error("failed to find verifier best result")
         return False
 
-    else:
-        df = kernel(orig_df_sample.copy(), next_result.kernel_conf)
-        report(df, best_result.instrument, next_result.kernel_conf, length=20)
+    if vbest_result is not None:
+        logger.info("verifier best result: %s", vbest_result)
 
-    logger.info("next best result: %s", next_result)
-    return True
+    # next_configs, next_num_configs = backtest_config.get_configs(
+    #     best_result.kernel_conf
+    # )
+    # next_result = _find_max(
+    #     df_sample, next_configs, logger, next_num_configs, backtest_config, chart_config
+    # )
+
+    # if next_result is None:
+    df = kernel(orig_df_sample.copy(), best_result.kernel_conf)
+    vdf = kernel(orig_vdf_sample.copy(), vbest_result.kernel_conf)
+    rec = df.iloc[-1]
+    vrec = vdf.iloc[-1]
+    logger.info("et: %s vet: %s t:%s", rec.exit_total, vrec.exit_total, rec.exit_total + vrec.exit_total)
+    # else:
+    # df = kernel(orig_df_sample.copy(), next_result.kernel_conf)
+    # report(df, best_result.instrument, next_result.kernel_conf, length=20)
+
+    # logger.info("next best result: %s", next_result)
+    return rec.exit_total + vrec.exit_total > 0
 
 
 def _find_max(
