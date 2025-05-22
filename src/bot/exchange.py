@@ -144,6 +144,8 @@ def getOandaOHLC(
                 "ask_close": candle.ask.c,
             }
         logger.info("retrieved %s candles", len(candles))
+        if fromTime is not None:
+            logger.info("using date: %s", fromTime)
 
     return df
 
