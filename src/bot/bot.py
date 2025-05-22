@@ -187,24 +187,35 @@ def bot(
         if bot_conf.backtest_only:
             break
 
-        if (
-            trade_id == -1
-            and (datetime.now() - last_solver_time).total_seconds()
-            > bot_conf.solver_conf.solver_interval
-        ):
-            solver_result = solve(
-                bot_conf.chart_conf,
-                bot_conf.kernel_conf,
-                oanda_ctx.token,
-                bot_conf.solver_conf,
-            )
-            if solver_result is None:
-                logger.error("failed to solve.")
-                sconf = bot_conf.kernel_conf
+        if (trade_id == -1):
+            if (datetime.now() - last_solver_time).total_seconds() > bot_conf.solver_conf.solver_interval:
+                # perform full solve if solver_interval has passed
+                solver_result = solve(
+                    bot_conf.chart_conf,
+                    bot_conf.kernel_conf,
+                    oanda_ctx.token,
+                    bot_conf.solver_conf,
+                )
+                if solver_result is None:
+                    logger.error("failed to solve.")
+                    sconf = bot_conf.kernel_conf
+                else:
+                    logger.info("selected %s", solver_result.kernel_conf)
+                    sconf = solver_result.kernel_conf
+                last_solver_time = datetime.now()
             else:
-                logger.info("selected %s", solver_result.kernel_conf)
-                sconf = solver_result.kernel_conf
-            last_solver_time = datetime.now()
+                # only perform partial solve if solver_interval has not passed
+                solver_result = solve(
+                    bot_conf.chart_conf,
+                    sconf,
+                    oanda_ctx.token,
+                    bot_conf.solver_conf,
+                )
+                if solver_result is None:
+                    logger.error("failed to solve.")
+                else:
+                    logger.info("selected %s", solver_result.kernel_conf)
+                    sconf = solver_result.kernel_conf
 
         sleep_until_next_5_minute()
 
