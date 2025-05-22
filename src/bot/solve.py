@@ -317,10 +317,11 @@ def segmented_solve(
             backtest_config,
             chart_config,
         )
-        if next_result is not None:
-            logger.info("next result: %s", next_result)
-        else:
-            logger.error("failed to find next result")
+
+    if next_result is not None:
+        logger.info("next result: %s", next_result)
+    else:
+        logger.error("failed to find next result")
 
     bet = 0.0
     if best_result is not None and next_result is None:
