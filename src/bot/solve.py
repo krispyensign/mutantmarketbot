@@ -11,7 +11,6 @@ from numba import jit  # type: ignore
 from bot.common import BacktestResult, ChartConfig, SolverConfig
 from core.chart import heiken_ashi_numpy
 from numpy.typing import NDArray
-from bot.reporting import report
 
 from core.kernel import EdgeCategory, KernelConfig, kernel_stage_1, kernel
 from bot.exchange import (
@@ -205,7 +204,9 @@ def _stats(
 
     wins: np.int64 = np.where(exit_value > 0, 1, 0).astype(np.int64).sum()
     losses: np.int64 = np.where(exit_value < 0, 1, 0).astype(np.int64).sum()
-    ratio = np.float64(wins / (wins + losses))
+    ratio = (
+        np.float64(wins / (wins + losses)) if (wins + losses) > 0 else np.float64(0.0)
+    )
 
     return final_total, min_total, wins, losses, ratio
 
@@ -256,11 +257,12 @@ def solve(
 
     # convert to dict for speed
     df = _convert_to_dict(orig_df)
-    configs, num_configs = backtest_config.get_configs(kernel_conf_in)
-    logger.info(f"total_combinations: {num_configs}")
-
     best_result = _find_max(
-        df, configs, logger, num_configs, backtest_config, chart_config
+        df,
+        logger,
+        backtest_config,
+        chart_config,
+        kernel_conf_in,
     )
 
     return best_result
@@ -270,8 +272,8 @@ def segmented_solve(
     chart_config: ChartConfig,
     kernel_conf_in: KernelConfig,
     token: str,
-    backtest_config: SolverConfig,
-) -> bool:
+    solver_config: SolverConfig,
+) -> float:
     """Run a backtest of the trading strategy."""
     logger = logging.getLogger("backtest")
     logger.info("starting backtest")
@@ -280,58 +282,59 @@ def segmented_solve(
         logger.error("failed to get git info: %s", git_info)
         return False
     logger.info("git info: %s %s", git_info[0], git_info[1])
-    
+
     # get data and preprocess
     orig_df = preprocess(
         _get_data(chart_config, token, logger), kernel_conf_in.wma_period
     )
 
-    # last 10% of orig_df is a sample segment, the first 90% is the training data
-    orig_df_train = orig_df.head(backtest_config.train_size)
-    orig_df_sample = orig_df.tail(backtest_config.sample_size)
-
-    # convert to dict for speed
+    orig_df_train = orig_df.head(solver_config.train_size)
+    orig_df_tp_train = orig_df_train.tail(solver_config.sample_size)
+    orig_df_sample = orig_df.tail(solver_config.sample_size)
     df_train = _convert_to_dict(orig_df_train)
-    df_sample = _convert_to_dict(orig_df_sample)
-
-    # convert to dict for speed
-    configs, num_configs = backtest_config.get_configs(kernel_conf_in)
-    logger.info(f"total_combinations: {num_configs}")
+    df_tp_train = _convert_to_dict(orig_df_tp_train)
 
     best_result = _find_max(
-        df_train, configs, logger, num_configs, backtest_config, chart_config
+        df_train,
+        logger,
+        solver_config,
+        chart_config,
+        kernel_conf_in,
     )
-
+    next_result: BacktestResult | None = None
     if best_result is None:
         logger.error("failed to find best result")
-        return False
+        return 0.0
 
-    if best_result is not None:
-        logger.info("best result: %s", best_result)
-    
-    next_configs, next_num_configs = backtest_config.get_configs(best_result.kernel_conf)
+    logger.info("best result: %s", best_result)
     next_result = _find_max(
-        df_sample, next_configs, logger, next_num_configs, backtest_config, chart_config
+        df_tp_train,
+        logger,
+        solver_config,
+        chart_config,
+        best_result.kernel_conf,
     )
 
-    if next_result is None:
-        logger.error("failed to find next best result")
-        return False
-
+    kconf = best_result.kernel_conf
     if next_result is not None:
-        logger.info("next best result: %s", next_result)
-        return True
+        logger.info("next result: %s", next_result)
+        kconf = next_result.kernel_conf
+    else:
+        logger.error("failed to find next result")
 
-    return False
+    df = kernel(orig_df_sample.copy(), kconf)
+    bet = df.iloc[-1].exit_total
+    logger.info("et: %s", round(bet, 5))
+
+    return bet
 
 
 def _find_max(
     df: dict[str, NDArray[Any]],
-    configs: Iterator[KernelConfig],
     logger: logging.Logger,
-    num_configs: int,
-    backtest_config: SolverConfig,
+    solver_config: SolverConfig,
     chart_config: ChartConfig,
+    kernel_conf_in: KernelConfig,
 ) -> BacktestResult | None:
     # init
     best_result: BacktestResult | None = None
@@ -342,6 +345,8 @@ def _find_max(
     ask = df["ask_close"]
 
     # run all combinations
+    configs, num_configs = solver_config.get_configs(kernel_conf_in)
+    logger.info(f"total_combinations: {num_configs}")
     for kernel_conf in configs:
         # log progress
         count = _log_progress(
@@ -350,8 +355,8 @@ def _find_max(
 
         # filter if needed
         if (
-            backtest_config.force_edge != ""
-            and EdgeCategory[backtest_config.force_edge] != kernel_conf.edge
+            solver_config.force_edge != ""
+            and EdgeCategory[solver_config.force_edge] != kernel_conf.edge
         ):
             continue
 
@@ -366,7 +371,7 @@ def _find_max(
         if (
             best_result is None
             or (ratio >= best_result.ratio)
-            and (et > best_result.exit_total)
+            and (et >= best_result.exit_total)
         ):
             best_result = BacktestResult(
                 chart_config.instrument,
@@ -446,7 +451,10 @@ def _get_data(
     )
 
     orig_df = getOandaOHLC(
-        ctx, count=chart_config.candle_count, granularity=chart_config.granularity
+        ctx,
+        count=chart_config.candle_count,
+        granularity=chart_config.granularity,
+        fromTime=chart_config.date_from,
     )
     logger.info(
         "count: %s granularity: %s",
