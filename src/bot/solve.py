@@ -322,11 +322,8 @@ def segmented_solve(
     else:
         logger.error("failed to find next result")
 
-    bet = 0.0
     df = kernel(orig_df_sample.copy(), kconf)
-    rec = df.iloc[-1]
-    bet = rec.exit_total
-
+    bet = df.iloc[-1].exit_total
     logger.info("et: %s", round(bet, 5))
 
     return bet >= 0
