@@ -45,6 +45,7 @@ class SolverConfig:
     force_edge: str = ""
     sample_size: int = 100
     train_size: int = 80
+    dates: list[datetime] | None = None
 
     def get_configs(
         self, kernel_conf: KernelConfig

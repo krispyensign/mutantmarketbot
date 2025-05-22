@@ -79,8 +79,15 @@ if __name__ == "__main__":
         sl = conf["stop_loss"] if "stop_loss" in conf else [0.0]
 
         # run
+        result = 0.0
         with PerfTimer(start_time, logger):
-            result = segmented_solve(chart_conf, kernel_conf, TOKEN, solver_conf)
+            if len(solver_conf.dates) == 0:
+                result = segmented_solve(chart_conf, kernel_conf, TOKEN, solver_conf)
+            else:
+                for date in solver_conf.dates:
+                    chart_conf.date_from = date
+                    result += segmented_solve(chart_conf, kernel_conf, TOKEN, solver_conf)
+
         if result == 0.0:
             sys.exit(1)
 
