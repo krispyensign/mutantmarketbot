@@ -273,14 +273,14 @@ def segmented_solve(
     kernel_conf_in: KernelConfig,
     token: str,
     solver_config: SolverConfig,
-) -> float:
+) -> tuple[float, float]:
     """Run a backtest of the trading strategy."""
     logger = logging.getLogger("backtest")
     logger.info("starting backtest")
     git_info = get_git_info()
     if type(git_info) is not tuple:
         logger.error("failed to get git info: %s", git_info)
-        return False
+        return 0.0, 0.0
     logger.info("git info: %s %s", git_info[0], git_info[1])
 
     # get data and preprocess
@@ -293,6 +293,7 @@ def segmented_solve(
     orig_df_sample = orig_df.tail(solver_config.sample_size)
     df_train = _convert_to_dict(orig_df_train)
     df_tp_train = _convert_to_dict(orig_df_tp_train)
+    df_sample = _convert_to_dict(orig_df_sample)
 
     best_result = _find_max(
         df_train,
@@ -301,32 +302,45 @@ def segmented_solve(
         chart_config,
         kernel_conf_in,
     )
-    next_result: BacktestResult | None = None
+    next_result_pk: BacktestResult | None = None
     if best_result is None:
         logger.error("failed to find best result")
-        return 0.0
+        return 0.0, 0.0
 
     logger.info("best result: %s", best_result)
-    next_result = _find_max(
+    next_result_pk = _find_max(
         df_tp_train,
         logger,
         solver_config,
         chart_config,
         best_result.kernel_conf,
     )
-
-    kconf = best_result.kernel_conf
-    if next_result is not None:
-        logger.info("next result: %s", next_result)
-        kconf = next_result.kernel_conf
+    if next_result_pk is not None:
+        logger.info("next result: %s", next_result_pk)
+        df = kernel(orig_df_sample.copy(), next_result_pk.kernel_conf)
+        pk_bet = df.iloc[-1].exit_total
     else:
         logger.error("failed to find next result")
+        pk_bet = 0.0
 
-    df = kernel(orig_df_sample.copy(), kconf)
-    bet = df.iloc[-1].exit_total
-    logger.info("et: %s", round(bet, 5))
+    next_result_spec = _find_max(
+        df_sample,
+        logger,
+        solver_config,
+        chart_config,
+        best_result.kernel_conf,
+    )
+    if next_result_spec is not None:
+        logger.info("next result: %s", next_result_spec)
+        df = kernel(orig_df_sample.copy(), next_result_spec.kernel_conf)
+        spec_bet = df.iloc[-1].exit_total
+    else:
+        logger.error("failed to find next result")
+        spec_bet = 0.0
+    
+    logger.info("pk_bet: %s spec_bet: %s", round(pk_bet, 5), round(spec_bet, 5))
 
-    return bet
+    return pk_bet, spec_bet
 
 
 def _find_max(
