@@ -273,7 +273,7 @@ def segmented_solve(
     kernel_conf_in: KernelConfig,
     token: str,
     solver_config: SolverConfig,
-) -> bool:
+) -> float:
     """Run a backtest of the trading strategy."""
     logger = logging.getLogger("backtest")
     logger.info("starting backtest")
@@ -304,7 +304,7 @@ def segmented_solve(
     next_result: BacktestResult | None = None
     if best_result is None:
         logger.error("failed to find best result")
-        return False
+        return 0.0
 
     logger.info("best result: %s", best_result)
     next_result = _find_max(
@@ -326,7 +326,7 @@ def segmented_solve(
     bet = df.iloc[-1].exit_total
     logger.info("et: %s", round(bet, 5))
 
-    return bet >= 0
+    return bet
 
 
 def _find_max(

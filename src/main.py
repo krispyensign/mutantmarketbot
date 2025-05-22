@@ -81,7 +81,7 @@ if __name__ == "__main__":
         # run
         with PerfTimer(start_time, logger):
             result = segmented_solve(chart_conf, kernel_conf, TOKEN, solver_conf)
-        if result is None:
+        if result == 0.0:
             sys.exit(1)
 
         logger.info("%s", result)
