@@ -318,20 +318,17 @@ def segmented_solve(
         chart_config,
     )
 
+    kconf = best_result.kernel_conf
     if next_result is not None:
         logger.info("next result: %s", next_result)
+        kconf = next_result.kernel_conf
     else:
         logger.error("failed to find next result")
 
     bet = 0.0
-    if next_result is None:
-        df = kernel(orig_df_sample.copy(), best_result.kernel_conf)
-        rec = df.iloc[-1]
-        bet = rec.exit_total
-    else:
-        df = kernel(orig_df_sample.copy(), next_result.kernel_conf)
-        rec = df.iloc[-1]
-        bet = rec.exit_total
+    df = kernel(orig_df_sample.copy(), kconf)
+    rec = df.iloc[-1]
+    bet = rec.exit_total
 
     logger.info("et: %s", round(bet, 5))
 
