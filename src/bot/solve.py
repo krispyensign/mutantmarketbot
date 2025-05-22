@@ -295,28 +295,28 @@ def segmented_solve(
     df_tp_train = _convert_to_dict(orig_df_tp_train)
 
     configs, num_configs = backtest_config.get_configs(kernel_conf_in)
-    bconfigs, vconfigs = itertools.tee(configs)
     logger.info(f"total_combinations: {num_configs}")
 
     best_result = _find_max(
-        df_train, bconfigs, logger, num_configs, backtest_config, chart_config
+        df_train, configs, logger, num_configs, backtest_config, chart_config
     )
     next_result: BacktestResult | None = None
     if best_result is None:
         logger.error("failed to find best result")
-    else:
-        logger.info("best result: %s", best_result)
-        next_configs, next_num_configs = backtest_config.get_configs(
-            best_result.kernel_conf
-        )
-        next_result = _find_max(
-            df_tp_train,
-            next_configs,
-            logger,
-            next_num_configs,
-            backtest_config,
-            chart_config,
-        )
+        return False
+
+    logger.info("best result: %s", best_result)
+    next_configs, next_num_configs = backtest_config.get_configs(
+        best_result.kernel_conf
+    )
+    next_result = _find_max(
+        df_tp_train,
+        next_configs,
+        logger,
+        next_num_configs,
+        backtest_config,
+        chart_config,
+    )
 
     if next_result is not None:
         logger.info("next result: %s", next_result)
@@ -324,19 +324,16 @@ def segmented_solve(
         logger.error("failed to find next result")
 
     bet = 0.0
-    if best_result is not None and next_result is None:
+    if next_result is None:
         df = kernel(orig_df_sample.copy(), best_result.kernel_conf)
         rec = df.iloc[-1]
         bet = rec.exit_total
-    elif best_result is not None and next_result is not None:
+    else:
         df = kernel(orig_df_sample.copy(), next_result.kernel_conf)
         rec = df.iloc[-1]
         bet = rec.exit_total
 
-    logger.info(
-        "et: %s",
-        round(bet, 5),
-    )
+    logger.info("et: %s", round(bet, 5))
 
     return bet >= 0
 
