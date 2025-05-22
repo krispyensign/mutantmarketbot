@@ -1,7 +1,6 @@
 """Backtest the trading strategy."""
 
 from datetime import datetime, timedelta
-import itertools
 import subprocess
 from typing import Any, Iterator
 import numpy as np
@@ -258,11 +257,12 @@ def solve(
 
     # convert to dict for speed
     df = _convert_to_dict(orig_df)
-    configs, num_configs = backtest_config.get_configs(kernel_conf_in)
-    logger.info(f"total_combinations: {num_configs}")
-
     best_result = _find_max(
-        df, configs, logger, num_configs, backtest_config, chart_config
+        df,
+        logger,
+        backtest_config,
+        chart_config,
+        kernel_conf_in,
     )
 
     return best_result
@@ -272,7 +272,7 @@ def segmented_solve(
     chart_config: ChartConfig,
     kernel_conf_in: KernelConfig,
     token: str,
-    backtest_config: SolverConfig,
+    solver_config: SolverConfig,
 ) -> bool:
     """Run a backtest of the trading strategy."""
     logger = logging.getLogger("backtest")
@@ -288,17 +288,18 @@ def segmented_solve(
         _get_data(chart_config, token, logger), kernel_conf_in.wma_period
     )
 
-    orig_df_train = orig_df.head(backtest_config.train_size)
-    orig_df_tp_train = orig_df_train.tail(backtest_config.sample_size)
-    orig_df_sample = orig_df.tail(backtest_config.sample_size)
+    orig_df_train = orig_df.head(solver_config.train_size)
+    orig_df_tp_train = orig_df_train.tail(solver_config.sample_size)
+    orig_df_sample = orig_df.tail(solver_config.sample_size)
     df_train = _convert_to_dict(orig_df_train)
     df_tp_train = _convert_to_dict(orig_df_tp_train)
 
-    configs, num_configs = backtest_config.get_configs(kernel_conf_in)
-    logger.info(f"total_combinations: {num_configs}")
-
     best_result = _find_max(
-        df_train, configs, logger, num_configs, backtest_config, chart_config
+        df_train,
+        logger,
+        solver_config,
+        chart_config,
+        kernel_conf_in,
     )
     next_result: BacktestResult | None = None
     if best_result is None:
@@ -306,16 +307,12 @@ def segmented_solve(
         return False
 
     logger.info("best result: %s", best_result)
-    next_configs, next_num_configs = backtest_config.get_configs(
-        best_result.kernel_conf
-    )
     next_result = _find_max(
         df_tp_train,
-        next_configs,
         logger,
-        next_num_configs,
-        backtest_config,
+        solver_config,
         chart_config,
+        best_result.kernel_conf,
     )
 
     kconf = best_result.kernel_conf
@@ -337,11 +334,10 @@ def segmented_solve(
 
 def _find_max(
     df: dict[str, NDArray[Any]],
-    configs: Iterator[KernelConfig],
     logger: logging.Logger,
-    num_configs: int,
-    backtest_config: SolverConfig,
+    solver_config: SolverConfig,
     chart_config: ChartConfig,
+    kernel_conf_in: KernelConfig,
 ) -> BacktestResult | None:
     # init
     best_result: BacktestResult | None = None
@@ -352,6 +348,8 @@ def _find_max(
     ask = df["ask_close"]
 
     # run all combinations
+    configs, num_configs = solver_config.get_configs(kernel_conf_in)
+    logger.info(f"total_combinations: {num_configs}")
     for kernel_conf in configs:
         # log progress
         count = _log_progress(
@@ -360,8 +358,8 @@ def _find_max(
 
         # filter if needed
         if (
-            backtest_config.force_edge != ""
-            and EdgeCategory[backtest_config.force_edge] != kernel_conf.edge
+            solver_config.force_edge != ""
+            and EdgeCategory[solver_config.force_edge] != kernel_conf.edge
         ):
             continue
 
