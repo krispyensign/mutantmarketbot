@@ -81,7 +81,7 @@ if __name__ == "__main__":
         # run
         result = 0.0
         with PerfTimer(start_time, logger):
-            if len(solver_conf.dates) == 0:
+            if solver_conf.dates is None or len(solver_conf.dates) == 0:
                 result = segmented_solve(chart_conf, kernel_conf, TOKEN, solver_conf)
             else:
                 for date in solver_conf.dates:
@@ -91,7 +91,7 @@ if __name__ == "__main__":
         if result == 0.0:
             sys.exit(1)
 
-        logger.info("%s", result)
+        logger.info("%s", round(result, 5))
 
     elif sys.argv[1] in ["bot", "backtest"]:
         # load config
