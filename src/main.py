@@ -80,18 +80,34 @@ if __name__ == "__main__":
 
         # run
         result = 0.0
+        sum_zk = 0.0
+        sum_pk = 0.0
         with PerfTimer(start_time, logger):
             if solver_conf.dates is None or len(solver_conf.dates) == 0:
-                pk, spec = segmented_solve(chart_conf, kernel_conf, TOKEN, solver_conf)
-                result = (pk + spec) / 2
+                zk, pk = segmented_solve(chart_conf, kernel_conf, TOKEN, solver_conf)
+                result = (zk + pk) / 2
             else:
                 for date in solver_conf.dates:
                     chart_conf.date_from = date
-                    pk, spec = segmented_solve(chart_conf, kernel_conf, TOKEN, solver_conf)
-                    result += (pk + spec) / 2
-                    logger.info("rt:%s pk:%s spec:%s", round(result, 5), round(pk, 5), round(spec, 5))
+                    zk, pk = segmented_solve(
+                        chart_conf, kernel_conf, TOKEN, solver_conf
+                    )
+                    sum_zk += zk
+                    sum_pk += pk
+                    result += (zk + pk) / 2
+                    logger.info(
+                        "rt:%s zk:%s pk:%s",
+                        round(result, 5),
+                        round(zk, 5),
+                        round(pk, 5),
+                    )
 
-        logger.info("final: %s", round(result, 5))
+        logger.info(
+            "final: %s zk:%s pk:%s",
+            round(result, 5),
+            round(sum_zk, 5),
+            round(sum_pk, 5),
+        )
 
     elif sys.argv[1] in ["bot", "backtest"]:
         # load config

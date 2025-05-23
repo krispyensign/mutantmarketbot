@@ -302,45 +302,50 @@ def segmented_solve(
         chart_config,
         kernel_conf_in,
     )
-    next_result_pk: BacktestResult | None = None
+    next_result_zk: BacktestResult | None = None
     if best_result is None:
         logger.error("failed to find best result")
         return 0.0, 0.0
 
     logger.info("best result: %s", best_result)
-    next_result_pk = _find_max(
+    next_result_zk = _find_max(
         df_tp_train,
         logger,
         solver_config,
         chart_config,
         best_result.kernel_conf,
     )
-    if next_result_pk is not None:
-        logger.info("next result: %s", next_result_pk)
-        df = kernel(orig_df_sample.copy(), next_result_pk.kernel_conf)
-        pk_bet = df.iloc[-1].exit_total
+    if next_result_zk is not None:
+        logger.info("zero knowledge result: %s", next_result_zk)
+        df = kernel(orig_df_sample.copy(), next_result_zk.kernel_conf)
+        zk_bet = df.iloc[-1].exit_total
     else:
-        logger.error("failed to find next result")
-        pk_bet = 0.0
+        logger.error("failed to find zero knowledge result")
+        zk_bet = 0.0
 
-    next_result_spec = _find_max(
+    next_result_pk = _find_max(
         df_sample,
         logger,
         solver_config,
         chart_config,
         best_result.kernel_conf,
     )
-    if next_result_spec is not None:
-        logger.info("next result: %s", next_result_spec)
-        df = kernel(orig_df_sample.copy(), next_result_spec.kernel_conf)
-        spec_bet = df.iloc[-1].exit_total
+    if next_result_pk is not None:
+        logger.info("perfect knowledge result: %s", next_result_pk)
+        df = kernel(orig_df_sample.copy(), next_result_pk.kernel_conf)
+        pk_bet = df.iloc[-1].exit_total
     else:
-        logger.error("failed to find next result")
-        spec_bet = 0.0
-    
-    logger.info("pk_bet: %s spec_bet: %s", round(pk_bet, 5), round(spec_bet, 5))
+        logger.error("failed to find perfect knowledge result")
+        pk_bet = 0.0
 
-    return pk_bet, spec_bet
+    if np.isnan(pk_bet):
+        pk_bet = 0.0
+    if np.isnan(zk_bet):
+        zk_bet = 0.0
+
+    logger.info("zk_bet: %s pk_bet: %s", round(zk_bet, 5), round(pk_bet, 5))
+
+    return zk_bet, pk_bet
 
 
 def _find_max(
