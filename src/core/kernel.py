@@ -48,7 +48,7 @@ class KernelConfig:
         """
         # if "open" in self.signal_exit_column:
         #     return EdgeCategory.Quasi
-        # else:
+
         return EdgeCategory.Deterministic
 
     @cached_property

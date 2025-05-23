@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta
 import subprocess
-from typing import Any, Iterator
+from typing import Any
 import numpy as np
 import pandas as pd
 import talib
