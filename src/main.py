@@ -80,32 +80,37 @@ if __name__ == "__main__":
 
         # run
         result = 0.0
-        sum_zk = 0.0
+        sum_raw_zk = 0.0
+        sum_refined_zk = 0.0
         sum_pk = 0.0
         with PerfTimer(start_time, logger):
             if solver_conf.dates is None or len(solver_conf.dates) == 0:
-                zk, pk = segmented_solve(chart_conf, kernel_conf, TOKEN, solver_conf)
-                result = (zk + pk) / 2
+                raw_zk, refined_zk, pk = segmented_solve(chart_conf, kernel_conf, TOKEN, solver_conf)
+                result = (raw_zk + pk) / 2
             else:
                 for date in solver_conf.dates:
                     chart_conf.date_from = date
-                    zk, pk = segmented_solve(
+                    raw_zk, refined_zk, pk = segmented_solve(
                         chart_conf, kernel_conf, TOKEN, solver_conf
                     )
-                    sum_zk += zk
+
+                    sum_raw_zk += raw_zk
+                    sum_refined_zk += refined_zk
                     sum_pk += pk
-                    result += (zk + pk) / 2
+                    result += (raw_zk + pk) / 2
                     logger.info(
-                        "rt:%s zk:%s pk:%s",
+                        "rt:%s raw_zk: %s refined_zk:%s pk:%s",
                         round(result, 5),
-                        round(zk, 5),
+                        round(raw_zk, 5),
+                        round(refined_zk, 5),
                         round(pk, 5),
                     )
 
         logger.info(
-            "final: %s zk:%s pk:%s",
+            "rt:%s raw_zk: %s refined_zk:%s pk:%s (final)",
             round(result, 5),
-            round(sum_zk, 5),
+            round(sum_raw_zk, 5),
+            round(sum_refined_zk, 5),
             round(sum_pk, 5),
         )
 

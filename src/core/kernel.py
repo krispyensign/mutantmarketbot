@@ -17,6 +17,9 @@ import numpy as np
 from numpy.typing import NDArray
 from numba import jit  # type: ignore
 
+USE_QUASI = True
+USE_EXIT_BOUND = True
+
 
 class EdgeCategory(Enum):
     """Enumeration class for edge categories."""
@@ -46,7 +49,7 @@ class KernelConfig:
             The edge of the kernel.
 
         """
-        if "open" in self.signal_exit_column:
+        if "open" in self.signal_exit_column and USE_QUASI:
             return EdgeCategory.Quasi
 
         return EdgeCategory.Deterministic
@@ -95,6 +98,7 @@ def wma_exit_signals(
         np.roll(wma_data, 1)
         wma_data[0] = np.nan
 
+    # if USE_QUASI or USE_EXIT_BOUND:
     signals = np.zeros(len(buy_data)).astype(np.bool)
     buy_signals = np.where(buy_data > wma_data, np.True_, np.False_)
     exit_signals = np.where(exit_data > wma_data, np.True_, np.False_)
@@ -103,12 +107,12 @@ def wma_exit_signals(
         An = buy_signals[i]
         B = exit_signals[i]
         signals[i] = not An1 and An or An1 and B
+    # else:
+    #     signals = np.where(buy_data > wma_data, 1, 0)
+    #     trigger = np.diff(signals.astype(np.int64))
+    #     trigger = np.concatenate((np.zeros(1), trigger))
 
-    # signals = np.where(buy_data > wma_data, 1, 0)
-    # trigger = np.diff(signals.astype(np.int64))
-    # trigger = np.concatenate((np.zeros(1), trigger))
-
-    # signals = np.where((exit_data < wma_data) & (trigger != 1), 0, signals)
+    #     signals = np.where((exit_data < wma_data) & (trigger != 1), 0, signals)
     trigger = np.diff(signals.astype(np.int64))
     trigger = np.concatenate((np.zeros(1), trigger))
 

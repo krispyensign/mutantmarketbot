@@ -273,14 +273,14 @@ def segmented_solve(
     kernel_conf_in: KernelConfig,
     token: str,
     solver_config: SolverConfig,
-) -> tuple[float, float]:
+) -> tuple[float, float, float]:
     """Run a backtest of the trading strategy."""
     logger = logging.getLogger("backtest")
     logger.info("starting backtest")
     git_info = get_git_info()
     if type(git_info) is not tuple:
         logger.error("failed to get git info: %s", git_info)
-        return 0.0, 0.0
+        return 0.0, 0.0, 0.0
     logger.info("git info: %s %s", git_info[0], git_info[1])
 
     # get data and preprocess
@@ -295,57 +295,65 @@ def segmented_solve(
     df_tp_train = _convert_to_dict(orig_df_tp_train)
     df_sample = _convert_to_dict(orig_df_sample)
 
-    best_result = _find_max(
+    raw_zk_result = _find_max(
         df_train,
         logger,
         solver_config,
         chart_config,
         kernel_conf_in,
     )
-    next_result_zk: BacktestResult | None = None
-    if best_result is None:
+    refined_result_zk: BacktestResult | None = None
+    if raw_zk_result is None:
         logger.error("failed to find best result")
-        return 0.0, 0.0
+        return 0.0, 0.0, 0.0
+    df = kernel(orig_df_sample.copy(), raw_zk_result.kernel_conf)
+    raw_zk_bet = df.iloc[-1].exit_total
+    if np.isnan(raw_zk_bet):
+        raw_zk_bet = 0.0
 
-    logger.info("best result: %s", best_result)
-    next_result_zk = _find_max(
+    logger.info("best result: %s", raw_zk_result)
+    refined_result_zk = _find_max(
         df_tp_train,
         logger,
         solver_config,
         chart_config,
-        best_result.kernel_conf,
+        raw_zk_result.kernel_conf,
     )
-    if next_result_zk is not None:
-        logger.info("zero knowledge result: %s", next_result_zk)
-        df = kernel(orig_df_sample.copy(), next_result_zk.kernel_conf)
+    if refined_result_zk is not None:
+        logger.info("refined zero knowledge result: %s", refined_result_zk)
+        df = kernel(orig_df_sample.copy(), refined_result_zk.kernel_conf)
         zk_bet = df.iloc[-1].exit_total
     else:
-        logger.error("failed to find zero knowledge result")
+        logger.error("failed to find refined zero knowledge result")
         zk_bet = 0.0
+        if np.isnan(zk_bet):
+            zk_bet = 0.0
 
-    next_result_pk = _find_max(
+    result_pk = _find_max(
         df_sample,
         logger,
         solver_config,
         chart_config,
-        best_result.kernel_conf,
+        raw_zk_result.kernel_conf,
     )
-    if next_result_pk is not None:
-        logger.info("perfect knowledge result: %s", next_result_pk)
-        df = kernel(orig_df_sample.copy(), next_result_pk.kernel_conf)
+    if result_pk is not None:
+        logger.info("perfect knowledge result: %s", result_pk)
+        df = kernel(orig_df_sample.copy(), result_pk.kernel_conf)
         pk_bet = df.iloc[-1].exit_total
+        if np.isnan(pk_bet):
+            pk_bet = 0.0
     else:
         logger.error("failed to find perfect knowledge result")
         pk_bet = 0.0
 
-    if np.isnan(pk_bet):
-        pk_bet = 0.0
-    if np.isnan(zk_bet):
-        zk_bet = 0.0
+    logger.info(
+        "raw_zk_bet: %s refined_zk_bet: %s pk_bet: %s",
+        round(raw_zk_bet, 5),
+        round(zk_bet, 5),
+        round(pk_bet, 5),
+    )
 
-    logger.info("zk_bet: %s pk_bet: %s", round(zk_bet, 5), round(pk_bet, 5))
-
-    return zk_bet, pk_bet
+    return raw_zk_bet, zk_bet, pk_bet
 
 
 def _find_max(
