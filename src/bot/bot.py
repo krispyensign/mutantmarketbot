@@ -146,23 +146,11 @@ def bot(
         logger.error("failed to get git info: %s", git_info)
         return None
 
-    sconf: KernelConfig
-    solver_result = solve(
-        bot_conf.chart_conf,
-        bot_conf.kernel_conf,
-        oanda_ctx.token,
-        bot_conf.solver_conf,
-    )
-    if solver_result is None:
-        logger.error("failed to solve.")
-        sconf = bot_conf.kernel_conf
-    else:
-        logger.info("selected %s", solver_result.kernel_conf)
-        sconf = solver_result.kernel_conf
+    sample_chart_conf, sconf = _full_solve(oanda_ctx, bot_conf, logger)
     last_solver_time = datetime.now()
 
     if not bot_conf.backtest_only:
-        sleep_until_next_5_minute()
+        _sleep_until_next_5_minute()
 
     # run bot
     trade_id: int = -1
@@ -173,7 +161,7 @@ def bot(
             trade_id, df, err = bot_run(
                 oanda_ctx,
                 sconf,
-                chart_conf=bot_conf.chart_conf,
+                chart_conf=sample_chart_conf,
                 trade_conf=bot_conf.trade_conf,
                 backtest_only=bot_conf.backtest_only,
             )
@@ -187,26 +175,87 @@ def bot(
         if bot_conf.backtest_only:
             break
 
-        if (
-            trade_id == -1
-            and (datetime.now() - last_solver_time).total_seconds()
-            > bot_conf.solver_conf.solver_interval
-        ):
-            solver_result = solve(
-                bot_conf.chart_conf,
-                bot_conf.kernel_conf,
-                oanda_ctx.token,
-                bot_conf.solver_conf,
-            )
-            if solver_result is None:
-                logger.error("failed to solve.")
-                sconf = bot_conf.kernel_conf
-            else:
-                logger.info("selected %s", solver_result.kernel_conf)
-                sconf = solver_result.kernel_conf
-            last_solver_time = datetime.now()
+        if trade_id == -1:
+            if (
+                datetime.now() - last_solver_time
+            ).total_seconds() > bot_conf.solver_conf.solver_interval:
+                try:
+                    sample_chart_conf, sconf = _full_solve(oanda_ctx, bot_conf, logger)
+                except Exception as err:
+                    logger.error(err)
+                    sleep(2)
+                    continue
 
-        sleep_until_next_5_minute()
+                last_solver_time = datetime.now()
+            else:
+                try:
+                    sconf = _partial_solve(
+                        oanda_ctx, bot_conf, logger, sample_chart_conf, sconf
+                    )
+                except Exception as err:
+                    logger.error(err)
+                    sleep(2)
+                    continue
+
+        _sleep_until_next_5_minute()
+
+
+def _partial_solve(
+    oanda_ctx: OandaContext,
+    bot_conf: BotConfig,
+    logger: logging.Logger,
+    sample_chart_conf: ChartConfig,
+    sconf: KernelConfig,
+) -> KernelConfig:
+    solver_result = solve(
+        sample_chart_conf,
+        sconf,
+        oanda_ctx.token,
+        bot_conf.solver_conf,
+    )
+    if solver_result is None:
+        logger.error("failed to solve.")
+    else:
+        logger.info("selected %s", solver_result.kernel_conf)
+        sconf = solver_result.kernel_conf
+
+    return sconf
+
+
+def _full_solve(
+    oanda_ctx: OandaContext, bot_conf: BotConfig, logger: logging.Logger
+) -> tuple[ChartConfig, KernelConfig]:
+    sample_chart_conf = ChartConfig(
+        instrument=bot_conf.chart_conf.instrument,
+        candle_count=bot_conf.solver_conf.sample_size,
+        granularity=bot_conf.chart_conf.granularity,
+    )
+    sconf: KernelConfig
+    solver_result = solve(
+        bot_conf.chart_conf,
+        bot_conf.kernel_conf,
+        oanda_ctx.token,
+        bot_conf.solver_conf,
+    )
+    if solver_result is None:
+        logger.error("failed to solve.")
+        sconf = bot_conf.kernel_conf
+    else:
+        logger.info("selected %s", solver_result.kernel_conf)
+        sconf = solver_result.kernel_conf
+    solver_result = solve(
+        sample_chart_conf,
+        sconf,
+        oanda_ctx.token,
+        bot_conf.solver_conf,
+    )
+    if solver_result is None:
+        logger.error("failed to solve.")
+    else:
+        logger.info("selected %s", solver_result.kernel_conf)
+        sconf = solver_result.kernel_conf
+
+    return sample_chart_conf, sconf
 
 
 def log_event(
@@ -277,7 +326,7 @@ def roundUp(dt: datetime) -> datetime:
     return (dt + timedelta(minutes=5 - dt.minute % 5)).replace(second=1, microsecond=0)
 
 
-def sleep_until_next_5_minute() -> None:
+def _sleep_until_next_5_minute() -> None:
     """Sleep until the next 5 minute interval."""
     now = datetime.now()
     next_time = roundUp(now)

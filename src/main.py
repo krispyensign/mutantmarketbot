@@ -80,18 +80,39 @@ if __name__ == "__main__":
 
         # run
         result = 0.0
+        sum_raw_zk = 0.0
+        sum_refined_zk = 0.0
+        sum_pk = 0.0
         with PerfTimer(start_time, logger):
             if solver_conf.dates is None or len(solver_conf.dates) == 0:
-                result = segmented_solve(chart_conf, kernel_conf, TOKEN, solver_conf)
+                raw_zk, refined_zk, pk = segmented_solve(chart_conf, kernel_conf, TOKEN, solver_conf)
+                result = (raw_zk + pk) / 2
             else:
                 for date in solver_conf.dates:
                     chart_conf.date_from = date
-                    result += segmented_solve(chart_conf, kernel_conf, TOKEN, solver_conf)
+                    raw_zk, refined_zk, pk = segmented_solve(
+                        chart_conf, kernel_conf, TOKEN, solver_conf
+                    )
 
-        if result == 0.0:
-            sys.exit(1)
+                    sum_raw_zk += raw_zk
+                    sum_refined_zk += refined_zk
+                    sum_pk += pk
+                    result += (raw_zk + pk) / 2
+                    logger.info(
+                        "rt:%s raw_zk: %s refined_zk:%s pk:%s",
+                        round(result, 5),
+                        round(raw_zk, 5),
+                        round(refined_zk, 5),
+                        round(pk, 5),
+                    )
 
-        logger.info("%s", round(result, 5))
+        logger.info(
+            "rt:%s raw_zk: %s refined_zk:%s pk:%s (final)",
+            round(result, 5),
+            round(sum_raw_zk, 5),
+            round(sum_refined_zk, 5),
+            round(sum_pk, 5),
+        )
 
     elif sys.argv[1] in ["bot", "backtest"]:
         # load config
