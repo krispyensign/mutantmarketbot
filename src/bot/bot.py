@@ -175,21 +175,51 @@ def bot(
         if bot_conf.backtest_only:
             break
 
-        if (
-            trade_id == -1
-            and (datetime.now() - last_solver_time).total_seconds()
-            > bot_conf.solver_conf.solver_interval
-        ):
-            try:
-                sample_chart_conf, sconf = _full_solve(oanda_ctx, bot_conf, logger)
-            except Exception as err:
-                logger.error(err)
-                sleep(2)
-                continue
+        if trade_id == -1:
+            if (
+                datetime.now() - last_solver_time
+            ).total_seconds() > bot_conf.solver_conf.solver_interval:
+                try:
+                    sample_chart_conf, sconf = _full_solve(oanda_ctx, bot_conf, logger)
+                except Exception as err:
+                    logger.error(err)
+                    sleep(2)
+                    continue
 
-            last_solver_time = datetime.now()
+                last_solver_time = datetime.now()
+            else:
+                try:
+                    sconf = _partial_solve(
+                        oanda_ctx, bot_conf, logger, sample_chart_conf, sconf
+                    )
+                except Exception as err:
+                    logger.error(err)
+                    sleep(2)
+                    continue
 
         _sleep_until_next_5_minute()
+
+
+def _partial_solve(
+    oanda_ctx: OandaContext,
+    bot_conf: BotConfig,
+    logger: logging.Logger,
+    sample_chart_conf: ChartConfig,
+    sconf: KernelConfig,
+) -> KernelConfig:
+    solver_result = solve(
+        sample_chart_conf,
+        sconf,
+        oanda_ctx.token,
+        bot_conf.solver_conf,
+    )
+    if solver_result is None:
+        logger.error("failed to solve.")
+    else:
+        logger.info("selected %s", solver_result.kernel_conf)
+        sconf = solver_result.kernel_conf
+
+    return sconf
 
 
 def _full_solve(
