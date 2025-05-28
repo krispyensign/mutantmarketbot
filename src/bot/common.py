@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 import logging
-from typing import Generator
+from typing import Iterator
 import uuid
 
 import numpy as np
@@ -49,7 +49,7 @@ class SolverConfig:
 
     def get_configs(
         self, kernel_conf: KernelConfig
-    ) -> tuple[Generator[KernelConfig], int]:
+    ) -> tuple[Iterator[KernelConfig], int]:
         """Get column pairs."""
         if kernel_conf.signal_buy_column == "":
             gen = (
