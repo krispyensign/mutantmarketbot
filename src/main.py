@@ -85,7 +85,9 @@ if __name__ == "__main__":
         sum_pk = 0.0
         with PerfTimer(start_time, logger):
             if solver_conf.dates is None or len(solver_conf.dates) == 0:
-                raw_zk, refined_zk, pk = segmented_solve(chart_conf, kernel_conf, TOKEN, solver_conf)
+                raw_zk, refined_zk, pk = segmented_solve(
+                    chart_conf, kernel_conf, TOKEN, solver_conf
+                )
                 result = (raw_zk + pk) / 2
             else:
                 for date in solver_conf.dates:
