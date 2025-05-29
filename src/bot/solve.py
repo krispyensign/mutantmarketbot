@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta
 import subprocess
+from time import sleep
 from typing import Any
 import numpy as np
 import pandas as pd
@@ -477,12 +478,19 @@ def _get_data(
         chart_config.instrument if instrument is None else instrument,
     )
 
-    orig_df = getOandaOHLC(
-        ctx,
-        count=chart_config.candle_count,
-        granularity=chart_config.granularity,
-        fromTime=chart_config.date_from,
-    )
+    while True:
+        try:
+            orig_df = getOandaOHLC(
+                ctx,
+                count=chart_config.candle_count,
+                granularity=chart_config.granularity,
+                fromTime=chart_config.date_from,
+            )
+            break
+        except Exception as e:
+            logger.error(e)
+            sleep(5)
+
     logger.info(
         "count: %s granularity: %s",
         chart_config.candle_count,
