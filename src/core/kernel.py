@@ -139,6 +139,8 @@ def kernel_stage_1(
     wma_data: NDArray[Any],
     ask_data: NDArray[Any],
     bid_data: NDArray[Any],
+    bid_high_data: NDArray[Any],
+    bid_low_data: NDArray[Any],
     atr: NDArray[Any],
     take_profit_conf: np.float64,
     stop_loss_conf: np.float64,
@@ -202,9 +204,12 @@ def kernel_stage_1(
         signal, trigger = wma_signals_no_exit(buy_data, wma_data)
 
     # calculate the entry prices:
-    position_value = entry_price(
+    position_value, position_high_value, position_low_value, entry_atr = entry_price(
         ask_data,
         bid_data,
+        bid_high_data,
+        bid_low_data,
+        atr,
         signal,
         trigger,
     )
@@ -212,35 +217,49 @@ def kernel_stage_1(
     # for internally managed take profits
     if take_profit_conf > 0:
         signal, trigger, tp_array = take_profit(
-            position_value,
-            atr,
+            position_high_value,
+            entry_atr,
             signal,
             take_profit_conf,
             trigger,
         )
-        position_value = entry_price(
-            ask_data,
-            bid_data,
-            signal,
-            trigger,
+        position_value, position_high_value, position_low_value, entry_atr = (
+            entry_price(
+                ask_data,
+                bid_data,
+                bid_high_data,
+                bid_low_data,
+                atr,
+                signal,
+                trigger,
+            )
         )
-        position_value = np.where(position_value > tp_array, tp_array, position_value)
+        position_value = np.where(
+            position_high_value > tp_array, tp_array, position_value
+        )
 
     if stop_loss_conf > 0:
         signal, trigger, sl_array = sl(
-            position_value,
-            atr,
+            position_low_value,
+            entry_atr,
             signal,
             stop_loss_conf,
             trigger,
         )
-        position_value = entry_price(
-            ask_data,
-            bid_data,
-            signal,
-            trigger,
+        position_value, position_high_value, position_low_value, entry_atr = (
+            entry_price(
+                ask_data,
+                bid_data,
+                bid_high_data,
+                bid_low_data,
+                atr,
+                signal,
+                trigger,
+            )
         )
-        position_value = np.where(position_value < sl_array, sl_array, position_value)
+        position_value = np.where(
+            position_low_value < sl_array, sl_array, position_value
+        )
 
     if erase:
         for i in range(3, len(signal)):
@@ -248,11 +267,16 @@ def kernel_stage_1(
                 signal[i - 1] = 0
         trigger = np.diff(signal)
         trigger = np.concatenate((np.zeros(1), trigger)).astype(np.int64)
-        position_value = entry_price(
-            ask_data,
-            bid_data,
-            signal,
-            trigger,
+        position_value, position_high_value, position_low_value, entry_atr = (
+            entry_price(
+                ask_data,
+                bid_data,
+                bid_high_data,
+                bid_low_data,
+                atr,
+                signal,
+                trigger,
+            )
         )
 
     exit_value = np.where(trigger == -1, position_value, 0)
@@ -304,6 +328,8 @@ def kernel(
         df["wma"].to_numpy(),
         df[config.ask_column].to_numpy(),
         df[config.bid_column].to_numpy(),
+        df["bid_high"].to_numpy(),
+        df["bid_low"].to_numpy(),
         df["atr"].to_numpy(),
         config.take_profit,
         config.stop_loss,

@@ -159,6 +159,8 @@ def _solve_run(
     kernel_conf: KernelConfig,
     df: dict[str, NDArray[Any]],
     ask_data: NDArray[Any],
+    bid_high_data: NDArray[Any],
+    bid_low_data: NDArray[Any],
     atr: NDArray[Any],
 ) -> tuple[np.float64, np.float64, np.int64, np.int64, np.float64] | None:
     # run the backtest
@@ -180,6 +182,8 @@ def _solve_run(
         wma,
         ask_data,
         df[kernel_conf.bid_column],
+        bid_high_data,
+        bid_low_data,
         atr,
         kernel_conf.take_profit,
         kernel_conf.stop_loss,
@@ -371,6 +375,8 @@ def _find_max(
     filter_start_time = datetime.now()
     atr = df["atr"]
     ask = df["ask_close"]
+    bid_high = df["bid_high"]
+    bid_low = df["bid_low"]
 
     # run all combinations
     configs, num_configs = solver_config.get_configs(kernel_conf_in)
@@ -389,7 +395,7 @@ def _find_max(
             continue
 
         # run
-        result = _solve_run(kernel_conf, df, ask, atr)
+        result = _solve_run(kernel_conf, df, ask, bid_high, bid_low, atr)
         if result is None:
             continue
 

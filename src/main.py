@@ -21,6 +21,7 @@ from bot.bot import bot
 from core.kernel import KernelConfig
 import os
 from bot.exchange import OandaContext
+import numpy as np
 
 TOKEN = os.environ.get("OANDA_TOKEN")
 ACCOUNT_ID = os.environ.get("OANDA_ACCOUNT_ID")
@@ -95,6 +96,9 @@ if __name__ == "__main__":
                     raw_zk, refined_zk, pk = segmented_solve(
                         chart_conf, kernel_conf, TOKEN, solver_conf
                     )
+                    raw_zk = 0.0 if np.isnan(raw_zk) else raw_zk
+                    refined_zk = 0.0 if np.isnan(refined_zk) else refined_zk
+                    pk = 0.0 if np.isnan(pk) else pk
 
                     sum_raw_zk += raw_zk
                     sum_refined_zk += refined_zk
