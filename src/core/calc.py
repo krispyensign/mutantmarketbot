@@ -7,47 +7,13 @@ from numba import jit  # type: ignore
 
 
 @jit(nopython=True)  # type: ignore
-def exit_total(
-    position_value: NDArray[np.float64],
-    trigger: NDArray[np.int64],
-    signal: NDArray[np.int64],
-) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
-    """Calculate the cumulative total of all trades and the running total of the portfolio.
-
-    Parameters
-    ----------
-    position_value : NDArray[Any]
-        The position values.
-    trigger : NDArray[Any]
-        The trigger values.
-    signal : NDArray[Any]
-        The signal values.
-
-    Returns
-    -------
-    tuple[NDArray[np.float64], NDArray[np.float64]]
-        A tuple containing the 'exit_value', 'exit_total' and 'running_total' arrays.
-
-    Notes
-    -----
-    The 'exit_total' array is the cumulative total of all trades, and the 'running_total' array
-    is the cumulative total of the portfolio, including the current trade.
-
-    """
-    exit_value = np.where(trigger == -1, position_value, 0)
-    exit_total = np.cumsum(exit_value)
-    running_total = exit_total + position_value * signal
-    return exit_value, exit_total, running_total
-
-
-@jit(nopython=True)  # type: ignore
 def take_profit(
     position_value: NDArray[Any],
     atr: NDArray[Any],
     signal: NDArray[Any],
     take_profit_value: float,
     trigger: NDArray[Any],
-) -> tuple[NDArray[np.int64], NDArray[np.int64]]:
+) -> tuple[NDArray[np.int64], NDArray[np.int64], NDArray[np.float64]]:
     """Apply a take profit strategy to trading signals.
 
     Parameters
@@ -79,7 +45,7 @@ def take_profit(
     signal = np.where((position_value > take_profit_array) & (trigger != 1), 0, signal)
     trigger = np.diff(signal)
     trigger = np.concatenate((np.zeros(1), trigger))
-    return signal.astype(np.int64), trigger.astype(np.int64)
+    return signal.astype(np.int64), trigger.astype(np.int64), take_profit_array
 
 
 @jit(nopython=True)  # type: ignore
@@ -89,7 +55,7 @@ def stop_loss(
     signal: NDArray[Any],
     stop_loss_value: float,
     trigger: NDArray[Any],
-) -> tuple[NDArray[Any], NDArray[Any]]:
+) -> tuple[NDArray[np.int64], NDArray[np.int64], NDArray[np.float64]]:
     """Apply a stop loss strategy to trading signals.
 
     This function takes arrays of position values, average true range (atr), signals,
@@ -120,7 +86,7 @@ def stop_loss(
     signal = np.where((position_value < stop_loss_array) & (trigger != 1), 0, signal)
     trigger = np.diff(signal)
     trigger = np.concatenate((np.zeros(1), trigger))
-    return signal.astype(np.int64), trigger.astype(np.int64)
+    return signal.astype(np.int64), trigger.astype(np.int64), stop_loss_array
 
 
 @jit(nopython=True)  # type: ignore
