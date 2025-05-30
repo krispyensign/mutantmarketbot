@@ -202,9 +202,10 @@ def kernel_stage_1(
         signal, trigger = wma_signals_no_exit(buy_data, wma_data)
 
     # calculate the entry prices:
-    position_value = entry_price(
+    position_value, entry_atr = entry_price(
         ask_data,
         bid_data,
+        atr,
         signal,
         trigger,
     )
@@ -213,14 +214,15 @@ def kernel_stage_1(
     if take_profit_conf > 0:
         signal, trigger = take_profit(
             position_value,
-            atr,
+            entry_atr,
             signal,
             take_profit_conf,
             trigger,
         )
-        position_value = entry_price(
+        position_value, entry_atr = entry_price(
             ask_data,
             bid_data,
+            atr,
             signal,
             trigger,
         )
@@ -228,7 +230,7 @@ def kernel_stage_1(
     if stop_loss_conf > 0:
         signal, trigger = sl(
             position_value,
-            atr,
+            entry_atr,
             signal,
             stop_loss_conf,
             trigger,
@@ -236,6 +238,7 @@ def kernel_stage_1(
         position_value = entry_price(
             ask_data,
             bid_data,
+            atr,
             signal,
             trigger,
         )

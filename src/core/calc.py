@@ -150,9 +150,10 @@ def forward_fill(arr: NDArray[Any]) -> NDArray[Any]:
 def entry_price(
     entry: NDArray[np.float64],
     exit: NDArray[np.float64],
+    atr: NDArray[np.float64],
     signal: NDArray[np.int64],
     trigger: NDArray[np.int64],
-) -> NDArray[np.float64]:
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """Calculate the entry price for a given trading signal.
 
     Parameters
@@ -175,6 +176,9 @@ def entry_price(
     internal_bit_mask = np.logical_or(signal, trigger)
     entry_price = np.where(trigger == 1, entry, np.nan)
     entry_price = forward_fill(entry_price) * internal_bit_mask
+    entry_atr =  np.where(trigger == 1, atr, np.nan)
+    entry_atr = forward_fill(entry_atr) * internal_bit_mask
+
     position_value = (exit - entry_price) * internal_bit_mask
 
-    return position_value.astype(np.float64)  # type: ignore
+    return position_value, entry_atr  # type: ignore
