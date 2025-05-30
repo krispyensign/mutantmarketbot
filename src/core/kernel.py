@@ -251,7 +251,7 @@ def kernel_stage_1(
                 signal[i - 1] = 0
         trigger = np.diff(signal)
         trigger = np.concatenate((np.zeros(1), trigger)).astype(np.int64)
-        position_value = entry_price(
+        position_value, entry_atr = entry_price(
             ask_data,
             bid_data,
             signal,
