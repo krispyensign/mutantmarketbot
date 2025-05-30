@@ -88,7 +88,7 @@ if __name__ == "__main__":
                 raw_zk, refined_zk, pk = segmented_solve(
                     chart_conf, kernel_conf, TOKEN, solver_conf
                 )
-                result = (raw_zk + pk) / 2
+                result = (refined_zk + pk) / 2
             else:
                 for date in solver_conf.dates:
                     chart_conf.date_from = date
@@ -99,7 +99,7 @@ if __name__ == "__main__":
                     sum_raw_zk += raw_zk
                     sum_refined_zk += refined_zk
                     sum_pk += pk
-                    result += (raw_zk + pk) / 2
+                    result += (refined_zk + pk) / 2
                     logger.info(
                         "rt:%s raw_zk: %s refined_zk:%s pk:%s",
                         round(result, 5),
