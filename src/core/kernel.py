@@ -236,7 +236,7 @@ def kernel_stage_1(
             stop_loss_conf,
             trigger,
         )
-        position_value = entry_price(
+        position_value, entry_atr = entry_price(
             ask_data,
             bid_data,
             atr,
