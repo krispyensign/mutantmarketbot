@@ -212,7 +212,7 @@ def kernel_stage_1(
 
     # for internally managed take profits
     if take_profit_conf > 0:
-        signal, trigger = take_profit(
+        signal, trigger, take_profit_array = take_profit(
             position_value,
             entry_atr,
             signal,
@@ -226,10 +226,10 @@ def kernel_stage_1(
             signal,
             trigger,
         )
-        position_value = np.where(position_value > entry_atr, entry_atr, position_value)
+        position_value = np.where(position_value > take_profit_array, take_profit_array, position_value)
 
     if stop_loss_conf > 0:
-        signal, trigger = sl(
+        signal, trigger, stop_loss_array = sl(
             position_value,
             entry_atr,
             signal,
@@ -243,7 +243,7 @@ def kernel_stage_1(
             signal,
             trigger,
         )
-        position_value = np.where(position_value < entry_atr, entry_atr, position_value)
+        position_value = np.where(position_value < stop_loss_array, stop_loss_array, position_value)
 
     if erase:
         for i in range(3, len(signal)):

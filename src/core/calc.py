@@ -47,7 +47,7 @@ def take_profit(
     signal: NDArray[Any],
     take_profit_value: float,
     trigger: NDArray[Any],
-) -> tuple[NDArray[np.int64], NDArray[np.int64]]:
+) -> tuple[NDArray[np.int64], NDArray[np.int64], NDArray[np.float64]]:
     """Apply a take profit strategy to trading signals.
 
     Parameters
@@ -79,7 +79,7 @@ def take_profit(
     signal = np.where((position_value > take_profit_array) & (trigger != 1), 0, signal)
     trigger = np.diff(signal)
     trigger = np.concatenate((np.zeros(1), trigger))
-    return signal.astype(np.int64), trigger.astype(np.int64)
+    return signal.astype(np.int64), trigger.astype(np.int64), take_profit_array
 
 
 @jit(nopython=True)  # type: ignore
@@ -89,7 +89,7 @@ def stop_loss(
     signal: NDArray[Any],
     stop_loss_value: float,
     trigger: NDArray[Any],
-) -> tuple[NDArray[Any], NDArray[Any]]:
+) -> tuple[NDArray[Any], NDArray[Any], NDArray[Any]]:
     """Apply a stop loss strategy to trading signals.
 
     This function takes arrays of position values, average true range (atr), signals,
@@ -120,7 +120,7 @@ def stop_loss(
     signal = np.where(position_value < stop_loss_array, 0, signal)
     trigger = np.diff(signal)
     trigger = np.concatenate((np.zeros(1), trigger))
-    return signal.astype(np.int64), trigger.astype(np.int64)
+    return signal.astype(np.int64), trigger.astype(np.int64), stop_loss_array
 
 
 @jit(nopython=True)  # type: ignore
