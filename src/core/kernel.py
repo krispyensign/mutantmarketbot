@@ -254,6 +254,7 @@ def kernel_stage_1(
         position_value, entry_atr = entry_price(
             ask_data,
             bid_data,
+            atr,
             signal,
             trigger,
         )
