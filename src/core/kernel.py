@@ -226,6 +226,7 @@ def kernel_stage_1(
             signal,
             trigger,
         )
+        position_value = np.where(position_value > entry_atr, entry_atr, position_value)
 
     if stop_loss_conf > 0:
         signal, trigger = sl(
@@ -242,6 +243,7 @@ def kernel_stage_1(
             signal,
             trigger,
         )
+        position_value = np.where(position_value < entry_atr, entry_atr, position_value)
 
     if erase:
         for i in range(3, len(signal)):
