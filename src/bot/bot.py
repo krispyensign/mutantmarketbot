@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import logging
 from time import sleep
 import pandas as pd
+import numpy as np
 
 from bot.common import (
     APP_START_TIME,
@@ -52,7 +53,8 @@ def bot_run(
 
     # run kernel on candles
     recent_last_time = datetime.fromisoformat(df.iloc[-1]["timestamp"])
-    df = kernel(df, config=kernel_conf)
+    digits = np.int64(3) if "JPY" in chart_conf.instrument else np.int64(5)
+    df = kernel(df, config=kernel_conf, digits=digits)
 
     # backtest only and do not trade
     if backtest_only:
@@ -80,6 +82,8 @@ def bot_run(
                 ctx,
                 trade_conf.amount,
                 trade_conf.bot_id,
+                take_profit=rec.tp,
+                trailing_distance=rec.td,
             )
         # close order
         elif (rec.trigger == -1 and trade_id != -1) or (
