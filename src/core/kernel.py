@@ -147,6 +147,7 @@ def kernel_stage_1(
     use_exit: np.bool,
     should_roll: np.bool,
     erase: np.bool,
+    digits: np.int64,
 ) -> tuple[
     NDArray[Any], NDArray[Any], NDArray[Any], NDArray[Any], NDArray[Any], NDArray[Any]
 ]:
@@ -222,6 +223,7 @@ def kernel_stage_1(
             signal,
             take_profit_conf,
             trigger,
+            digits,
         )
         position_value, position_high_value, position_low_value, entry_atr = (
             entry_price(
@@ -245,6 +247,7 @@ def kernel_stage_1(
             signal,
             stop_loss_conf,
             trigger,
+            digits,
         )
         position_value, position_high_value, position_low_value, entry_atr = (
             entry_price(
@@ -289,6 +292,7 @@ def kernel_stage_1(
 def kernel(
     df: pd.DataFrame,
     config: KernelConfig,
+    digits: np.int64,
 ) -> pd.DataFrame:
     """Process a DataFrame containing trading data.
 
@@ -336,6 +340,7 @@ def kernel(
         config.signal_buy_column != config.signal_exit_column,
         should_roll,
         config.edge == EdgeCategory.Quasi,
+        digits,
     )
 
     return df

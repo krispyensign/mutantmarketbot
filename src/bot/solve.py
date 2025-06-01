@@ -162,6 +162,7 @@ def _solve_run(
     bid_high_data: NDArray[Any],
     bid_low_data: NDArray[Any],
     atr: NDArray[Any],
+    digits: np.int64,
 ) -> tuple[np.float64, np.float64, np.int64, np.int64, np.float64] | None:
     # run the backtest
     should_roll = (
@@ -190,6 +191,7 @@ def _solve_run(
         kernel_conf.signal_buy_column != kernel_conf.signal_exit_column,
         should_roll,
         kernel_conf.edge == EdgeCategory.Quasi,
+        digits,
     )
 
     result = _stats(exit_value, exit_total)
@@ -300,6 +302,8 @@ def segmented_solve(
     df_tp_train = _convert_to_dict(orig_df_tp_train)
     df_sample = _convert_to_dict(orig_df_sample)
 
+    digits = np.int64(3) if "JPY" in chart_config.instrument else np.int64(5)
+
     raw_zk_result = _find_max(
         df_train,
         logger,
@@ -311,7 +315,7 @@ def segmented_solve(
     if raw_zk_result is None:
         logger.error("failed to find best result")
         return 0.0, 0.0, 0.0
-    df = kernel(orig_df_sample.copy(), raw_zk_result.kernel_conf)
+    df = kernel(orig_df_sample.copy(), raw_zk_result.kernel_conf, digits)
     raw_zk_bet = df.iloc[-1].exit_total
     if np.isnan(raw_zk_bet):
         raw_zk_bet = 0.0
@@ -326,7 +330,7 @@ def segmented_solve(
     )
     if refined_result_zk is not None:
         logger.info("refined zero knowledge result: %s", refined_result_zk)
-        df = kernel(orig_df_sample.copy(), refined_result_zk.kernel_conf)
+        df = kernel(orig_df_sample.copy(), refined_result_zk.kernel_conf, digits)
         zk_bet = df.iloc[-1].exit_total
     else:
         logger.error("failed to find refined zero knowledge result")
@@ -343,7 +347,7 @@ def segmented_solve(
     )
     if result_pk is not None:
         logger.info("perfect knowledge result: %s", result_pk)
-        df = kernel(orig_df_sample.copy(), result_pk.kernel_conf)
+        df = kernel(orig_df_sample.copy(), result_pk.kernel_conf, digits)
         pk_bet = df.iloc[-1].exit_total
         if np.isnan(pk_bet):
             pk_bet = 0.0
@@ -381,6 +385,7 @@ def _find_max(
     # run all combinations
     configs, num_configs = solver_config.get_configs(kernel_conf_in)
     logger.info(f"total_combinations: {num_configs}")
+    digits = np.int64(3) if "JPY" in chart_config.instrument else np.int64(5)
     for kernel_conf in configs:
         # log progress
         count = _log_progress(
@@ -395,7 +400,7 @@ def _find_max(
             continue
 
         # run
-        result = _solve_run(kernel_conf, df, ask, bid_high, bid_low, atr)
+        result = _solve_run(kernel_conf, df, ask, bid_high, bid_low, atr, digits)
         if result is None:
             continue
 
@@ -495,7 +500,7 @@ def _get_data(
             break
         except Exception as e:
             logger.error(e)
-            sleep(5)
+            sleep(2)
 
     logger.info(
         "count: %s granularity: %s",
