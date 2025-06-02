@@ -98,7 +98,6 @@ def wma_exit_signals(
         np.roll(wma_data, 1)
         wma_data[0] = np.nan
 
-    # if USE_QUASI or USE_EXIT_BOUND:
     signals = np.zeros(len(buy_data)).astype(np.bool)
     buy_signals = np.where(buy_data > wma_data, np.True_, np.False_)
     exit_signals = np.where(exit_data > wma_data, np.True_, np.False_)
@@ -107,12 +106,7 @@ def wma_exit_signals(
         An = buy_signals[i]
         B = exit_signals[i]
         signals[i] = not An1 and An or An1 and B
-    # else:
-    #     signals = np.where(buy_data > wma_data, 1, 0)
-    #     trigger = np.diff(signals.astype(np.int64))
-    #     trigger = np.concatenate((np.zeros(1), trigger))
 
-    #     signals = np.where((exit_data < wma_data) & (trigger != 1), 0, signals)
     trigger = np.diff(signals.astype(np.int64))
     trigger = np.concatenate((np.zeros(1), trigger))
 
@@ -205,7 +199,7 @@ def kernel_stage_1(
         signal, trigger = wma_signals_no_exit(buy_data, wma_data)
 
     # calculate the entry prices:
-    position_value, _, _, entry_atr = entry_price(
+    position_value, position_high_value, _, entry_atr = entry_price(
         ask_data,
         bid_data,
         bid_high_data,
@@ -218,14 +212,14 @@ def kernel_stage_1(
     # for internally managed take profits
     if take_profit_conf > 0:
         signal, trigger, tp_array = take_profit(
-            position_value,
+            position_high_value,
             entry_atr,
             signal,
             take_profit_conf,
             trigger,
             digits,
         )
-        position_value, _, _, entry_atr = (
+        position_value, position_high_value, _, entry_atr = (
             entry_price(
                 ask_data,
                 bid_data,
@@ -236,9 +230,9 @@ def kernel_stage_1(
                 trigger,
             )
         )
-        # position_value = np.where(
-        #     position_high_value > tp_array, tp_array, position_value
-        # )
+        position_value = np.where(
+            position_high_value > tp_array, tp_array, position_value
+        )
 
     if stop_loss_conf > 0:
         signal, trigger, sl_array = sl(
