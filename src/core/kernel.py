@@ -49,8 +49,8 @@ class KernelConfig:
             The edge of the kernel.
 
         """
-        # if "open" in self.signal_exit_column and USE_QUASI:
-        #     return EdgeCategory.Quasi
+        if "open" in self.signal_exit_column and USE_QUASI:
+            return EdgeCategory.Quasi
 
         return EdgeCategory.Deterministic
 
