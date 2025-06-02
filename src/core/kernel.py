@@ -205,7 +205,7 @@ def kernel_stage_1(
         signal, trigger = wma_signals_no_exit(buy_data, wma_data)
 
     # calculate the entry prices:
-    position_value, position_high_value, position_low_value, entry_atr = entry_price(
+    position_value, _, _, entry_atr = entry_price(
         ask_data,
         bid_data,
         bid_high_data,
@@ -218,14 +218,14 @@ def kernel_stage_1(
     # for internally managed take profits
     if take_profit_conf > 0:
         signal, trigger, tp_array = take_profit(
-            position_high_value,
+            position_value,
             entry_atr,
             signal,
             take_profit_conf,
             trigger,
             digits,
         )
-        position_value, position_high_value, position_low_value, entry_atr = (
+        position_value, _, _, entry_atr = (
             entry_price(
                 ask_data,
                 bid_data,
@@ -236,20 +236,20 @@ def kernel_stage_1(
                 trigger,
             )
         )
-        position_value = np.where(
-            position_high_value > tp_array, tp_array, position_value
-        )
+        # position_value = np.where(
+        #     position_high_value > tp_array, tp_array, position_value
+        # )
 
     if stop_loss_conf > 0:
         signal, trigger, sl_array = sl(
-            position_low_value,
+            position_value,
             entry_atr,
             signal,
             stop_loss_conf,
             trigger,
             digits,
         )
-        position_value, position_high_value, position_low_value, entry_atr = (
+        position_value, _, _, entry_atr = (
             entry_price(
                 ask_data,
                 bid_data,
@@ -260,9 +260,9 @@ def kernel_stage_1(
                 trigger,
             )
         )
-        position_value = np.where(
-            position_low_value < sl_array, sl_array, position_value
-        )
+        # position_value = np.where(
+        #     position_low_value < sl_array, sl_array, position_value
+        # )
 
     if erase:
         for i in range(3, len(signal)):
