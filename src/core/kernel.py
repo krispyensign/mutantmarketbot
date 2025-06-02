@@ -49,8 +49,8 @@ class KernelConfig:
             The edge of the kernel.
 
         """
-        if "open" in self.signal_exit_column and USE_QUASI:
-            return EdgeCategory.Quasi
+        # if "open" in self.signal_exit_column and USE_QUASI:
+        #     return EdgeCategory.Quasi
 
         return EdgeCategory.Deterministic
 
@@ -199,7 +199,7 @@ def kernel_stage_1(
         signal, trigger = wma_signals_no_exit(buy_data, wma_data)
 
     # calculate the entry prices:
-    position_value, position_high_value, _, entry_atr = entry_price(
+    position_value, position_high_value, position_low_value, entry_atr, entry_spread = entry_price(
         ask_data,
         bid_data,
         bid_high_data,
@@ -219,7 +219,7 @@ def kernel_stage_1(
             trigger,
             digits,
         )
-        position_value, position_high_value, _, entry_atr = (
+        position_value, position_high_value, position_low_value, entry_atr, entry_spread = (
             entry_price(
                 ask_data,
                 bid_data,
@@ -236,14 +236,15 @@ def kernel_stage_1(
 
     if stop_loss_conf > 0:
         signal, trigger, sl_array = sl(
-            position_value,
+            position_low_value,
             entry_atr,
+            entry_spread,
             signal,
             stop_loss_conf,
             trigger,
             digits,
         )
-        position_value, _, _, entry_atr = (
+        position_value, position_high_value, position_low_value, entry_atr, entry_spread = (
             entry_price(
                 ask_data,
                 bid_data,
@@ -254,9 +255,9 @@ def kernel_stage_1(
                 trigger,
             )
         )
-        # position_value = np.where(
-        #     position_low_value < sl_array, sl_array, position_value
-        # )
+        position_value = np.where(
+            position_low_value < sl_array, sl_array, position_value
+        )
 
     if erase:
         for i in range(3, len(signal)):
@@ -264,7 +265,7 @@ def kernel_stage_1(
                 signal[i - 1] = 0
         trigger = np.diff(signal)
         trigger = np.concatenate((np.zeros(1), trigger)).astype(np.int64)
-        position_value, position_high_value, position_low_value, entry_atr = (
+        position_value, position_high_value, position_low_value, entry_atr, _ = (
             entry_price(
                 ask_data,
                 bid_data,

@@ -53,6 +53,7 @@ def take_profit(
 def stop_loss(
     position_value: NDArray[Any],
     atr: NDArray[Any],
+    spread: NDArray[Any],
     signal: NDArray[Any],
     stop_loss_value: float,
     trigger: NDArray[Any],
@@ -85,6 +86,7 @@ def stop_loss(
 
     """
     stop_loss_array = np.round(-stop_loss_value * atr, digits)
+    stop_loss_array = np.where(spread > stop_loss_array, spread, stop_loss_array) 
     signal = np.where((position_value < stop_loss_array) & (trigger != 1), 0, signal)
     trigger = np.diff(signal)
     trigger = np.concatenate((np.zeros(1), trigger))
@@ -124,12 +126,14 @@ def entry_price(
     signal: NDArray[np.int64],
     trigger: NDArray[np.int64],
 ) -> tuple[
-    NDArray[np.float64], NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]
+    NDArray[np.float64], NDArray[np.float64], NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]
 ]:
     """Calculate the entry price for a given trading signal."""
     internal_bit_mask = np.logical_or(signal, trigger)
     entry_price = np.where(trigger == 1, entry, np.nan)
     entry_price = forward_fill(entry_price) * internal_bit_mask
+    entry_spread = np.where(trigger == 1, exit - entry, np.nan)
+    entry_spread = forward_fill(entry_spread) * internal_bit_mask
 
     position_value = (exit - entry_price) * internal_bit_mask
     position_high_value = (exit_high - entry_price) * internal_bit_mask
@@ -138,4 +142,5 @@ def entry_price(
     entry_atr = np.where(trigger == 1, atr, np.nan)
     entry_atr = forward_fill(entry_atr) * internal_bit_mask
 
-    return position_value, position_high_value, position_low_value, entry_atr  # type: ignore
+
+    return position_value, position_high_value, position_low_value, entry_atr, entry_spread  # type: ignore
