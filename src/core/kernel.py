@@ -200,15 +200,17 @@ def kernel_stage_1(
         signal, trigger = wma_signals_no_exit(buy_data, wma_data)
 
     # calculate the entry prices:
-    position_value, position_high_value, position_low_value, entry_atr, entry_spread = entry_price(
-        ask_data,
-        bid_data,
-        bid_high_data,
-        bid_low_data,
-        atr,
-        signal,
-        trigger,
-        spread,
+    position_value, position_high_value, position_low_value, entry_atr, entry_spread = (
+        entry_price(
+            ask_data,
+            bid_data,
+            bid_high_data,
+            bid_low_data,
+            atr,
+            signal,
+            trigger,
+            spread,
+        )
     )
 
     # for internally managed take profits
@@ -221,17 +223,21 @@ def kernel_stage_1(
             trigger,
             digits,
         )
-        position_value, position_high_value, position_low_value, entry_atr, entry_spread = (
-            entry_price(
-                ask_data,
-                bid_data,
-                bid_high_data,
-                bid_low_data,
-                atr,
-                signal,
-                trigger,
-                spread,
-            )
+        (
+            position_value,
+            position_high_value,
+            position_low_value,
+            entry_atr,
+            entry_spread,
+        ) = entry_price(
+            ask_data,
+            bid_data,
+            bid_high_data,
+            bid_low_data,
+            atr,
+            signal,
+            trigger,
+            spread,
         )
         position_value = np.where(
             position_high_value > tp_array, tp_array, position_value
@@ -247,17 +253,21 @@ def kernel_stage_1(
             trigger,
             digits,
         )
-        position_value, position_high_value, position_low_value, entry_atr, entry_spread = (
-            entry_price(
-                ask_data,
-                bid_data,
-                bid_high_data,
-                bid_low_data,
-                atr,
-                signal,
-                trigger,
-                spread,
-            )
+        (
+            position_value,
+            position_high_value,
+            position_low_value,
+            entry_atr,
+            entry_spread,
+        ) = entry_price(
+            ask_data,
+            bid_data,
+            bid_high_data,
+            bid_low_data,
+            atr,
+            signal,
+            trigger,
+            spread,
         )
         position_value = np.where(
             position_low_value < sl_array, sl_array, position_value

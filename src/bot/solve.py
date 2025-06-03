@@ -403,7 +403,9 @@ def _find_max(
             continue
 
         # run
-        result = _solve_run(kernel_conf, df, ask, bid_high, bid_low, atr, digits, spread)
+        result = _solve_run(
+            kernel_conf, df, ask, bid_high, bid_low, atr, digits, spread
+        )
         if result is None:
             continue
 
