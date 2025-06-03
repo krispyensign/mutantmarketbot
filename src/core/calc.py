@@ -87,7 +87,7 @@ def stop_loss(
     """
     inc = 10 ** (-digits)
     stop_loss_array = np.round(-stop_loss_value * atr, digits)
-    stop_loss_array = np.where( spread + inc > np.abs(stop_loss_array), - spread - inc, stop_loss_array) 
+    stop_loss_array = np.where( spread >= np.abs(stop_loss_array), - spread - inc, stop_loss_array) 
     signal = np.where((position_value < stop_loss_array) & (trigger != 1), 0, signal)
     trigger = np.diff(signal)
     trigger = np.concatenate((np.zeros(1), trigger))
