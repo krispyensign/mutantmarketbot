@@ -142,6 +142,7 @@ def kernel_stage_1(
     should_roll: np.bool,
     erase: np.bool,
     digits: np.int64,
+    spread: NDArray[Any],
 ) -> tuple[
     NDArray[Any], NDArray[Any], NDArray[Any], NDArray[Any], NDArray[Any], NDArray[Any]
 ]:
@@ -207,6 +208,7 @@ def kernel_stage_1(
         atr,
         signal,
         trigger,
+        spread,
     )
 
     # for internally managed take profits
@@ -228,6 +230,7 @@ def kernel_stage_1(
                 atr,
                 signal,
                 trigger,
+                spread,
             )
         )
         position_value = np.where(
@@ -253,6 +256,7 @@ def kernel_stage_1(
                 atr,
                 signal,
                 trigger,
+                spread,
             )
         )
         position_value = np.where(
@@ -274,6 +278,7 @@ def kernel_stage_1(
                 atr,
                 signal,
                 trigger,
+                spread,
             )
         )
 
@@ -336,6 +341,7 @@ def kernel(
         should_roll,
         config.edge == EdgeCategory.Quasi,
         digits,
+        df["ask_close"] - df["bid_close"],
     )
 
     return df

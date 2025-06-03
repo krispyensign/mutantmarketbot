@@ -87,7 +87,7 @@ def stop_loss(
     """
     inc = 10 ** (-digits)
     stop_loss_array = np.round(-stop_loss_value * atr, digits)
-    stop_loss_array = np.where( np.abs(spread) > np.abs(stop_loss_array), spread - inc, stop_loss_array) 
+    stop_loss_array = np.where( spread + inc > np.abs(stop_loss_array), - spread - inc, stop_loss_array) 
     signal = np.where((position_value < stop_loss_array) & (trigger != 1), 0, signal)
     trigger = np.diff(signal)
     trigger = np.concatenate((np.zeros(1), trigger))
@@ -126,6 +126,7 @@ def entry_price(
     atr: NDArray[Any],
     signal: NDArray[np.int64],
     trigger: NDArray[np.int64],
+    spread: NDArray[np.float64], 
 ) -> tuple[
     NDArray[np.float64], NDArray[np.float64], NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]
 ]:
@@ -133,7 +134,7 @@ def entry_price(
     internal_bit_mask = np.logical_or(signal, trigger)
     entry_price = np.where(trigger == 1, entry, np.nan)
     entry_price = forward_fill(entry_price) * internal_bit_mask
-    entry_spread = np.where(trigger == 1, exit - entry, np.nan)
+    entry_spread = np.where(trigger == 1, spread, np.nan)
     entry_spread = forward_fill(entry_spread) * internal_bit_mask
 
     position_value = (exit - entry_price) * internal_bit_mask

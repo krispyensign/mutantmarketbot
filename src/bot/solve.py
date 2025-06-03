@@ -163,6 +163,7 @@ def _solve_run(
     bid_low_data: NDArray[Any],
     atr: NDArray[Any],
     digits: np.int64,
+    spread: NDArray[Any],
 ) -> tuple[np.float64, np.float64, np.int64, np.int64, np.float64] | None:
     # run the backtest
     should_roll = (
@@ -192,6 +193,7 @@ def _solve_run(
         should_roll,
         kernel_conf.edge == EdgeCategory.Quasi,
         digits,
+        spread,
     )
 
     result = _stats(exit_value, exit_total)
@@ -381,6 +383,7 @@ def _find_max(
     ask = df["ask_close"]
     bid_high = df["bid_high"]
     bid_low = df["bid_low"]
+    spread = df["ask_close"] - df["bid_close"]
 
     # run all combinations
     configs, num_configs = solver_config.get_configs(kernel_conf_in)
@@ -400,7 +403,7 @@ def _find_max(
             continue
 
         # run
-        result = _solve_run(kernel_conf, df, ask, bid_high, bid_low, atr, digits)
+        result = _solve_run(kernel_conf, df, ask, bid_high, bid_low, atr, digits, spread)
         if result is None:
             continue
 
