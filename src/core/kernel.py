@@ -213,6 +213,35 @@ def kernel_stage_1(
         )
     )
 
+    if take_profit_conf > 0:
+        signal, trigger, tp_array = take_profit(
+            position_high_value,
+            entry_atr,
+            signal,
+            take_profit_conf,
+            trigger,
+            digits,
+        )
+        (
+            position_value,
+            position_high_value,
+            position_low_value,
+            entry_atr,
+            entry_spread,
+        ) = entry_price(
+            ask_data,
+            bid_data,
+            bid_high_data,
+            bid_low_data,
+            atr,
+            signal,
+            trigger,
+            spread,
+        )
+        position_value = np.where(
+            position_high_value >= tp_array, tp_array, position_value
+        )
+
     if stop_loss_conf > 0:
         signal, trigger, sl_array = sl(
             position_low_value,
@@ -241,35 +270,6 @@ def kernel_stage_1(
         )
         position_value = np.where(
             position_low_value <= sl_array, sl_array, position_value
-        )
-
-    if take_profit_conf > 0:
-        signal, trigger, tp_array = take_profit(
-            position_high_value,
-            entry_atr,
-            signal,
-            take_profit_conf,
-            trigger,
-            digits,
-        )
-        (
-            position_value,
-            position_high_value,
-            position_low_value,
-            entry_atr,
-            entry_spread,
-        ) = entry_price(
-            ask_data,
-            bid_data,
-            bid_high_data,
-            bid_low_data,
-            atr,
-            signal,
-            trigger,
-            spread,
-        )
-        position_value = np.where(
-            position_high_value >= tp_array, tp_array, position_value
         )
 
 
