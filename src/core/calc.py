@@ -8,8 +8,8 @@ from numba import jit  # type: ignore
 
 @jit(nopython=True)  # type: ignore
 def take_profit(
-    position_value: NDArray[Any],
-    atr: NDArray[Any],
+    position_high_value: NDArray[Any],
+    entry_atr: NDArray[Any],
     signal: NDArray[Any],
     take_profit_value: float,
     trigger: NDArray[Any],
@@ -42,8 +42,8 @@ def take_profit(
     between the 'signal' array and the previous value of the 'signal' array.
 
     """
-    take_profit_array = np.round(take_profit_value * atr, digits)
-    signal = np.where((position_value >= take_profit_array) & (trigger != 1), 0, signal)
+    take_profit_array = np.round(take_profit_value * entry_atr, digits)
+    signal = np.where((position_high_value >= take_profit_array) & (trigger != 1), 0, signal)
     trigger = np.diff(signal)
     trigger = np.concatenate((np.zeros(1), trigger))
     return signal.astype(np.int64), trigger.astype(np.int64), take_profit_array
@@ -51,9 +51,9 @@ def take_profit(
 
 @jit(nopython=True)  # type: ignore
 def stop_loss(
-    position_value: NDArray[Any],
-    atr: NDArray[Any],
-    spread: NDArray[Any],
+    position_low_value: NDArray[Any],
+    entry_atr: NDArray[Any],
+    entry_spread: NDArray[Any],
     signal: NDArray[Any],
     stop_loss_value: float,
     trigger: NDArray[Any],
@@ -86,11 +86,11 @@ def stop_loss(
 
     """
     inc = 10 ** (-digits)
-    stop_loss_array = np.round(-stop_loss_value * atr, digits)
+    stop_loss_array = np.round(-stop_loss_value * entry_atr, digits)
     stop_loss_array = np.where(
-        spread >= np.abs(stop_loss_array), -spread - inc, stop_loss_array
+        entry_spread >= np.abs(stop_loss_array), -entry_spread - inc, stop_loss_array
     )
-    signal = np.where((position_value <= stop_loss_array) & (trigger != 1), 0, signal)
+    signal = np.where((position_low_value <= stop_loss_array) & (trigger != 1), 0, signal)
     trigger = np.diff(signal)
     trigger = np.concatenate((np.zeros(1), trigger))
     return signal.astype(np.int64), trigger.astype(np.int64), stop_loss_array

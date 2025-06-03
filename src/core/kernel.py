@@ -17,7 +17,7 @@ import numpy as np
 from numpy.typing import NDArray
 from numba import jit  # type: ignore
 
-USE_QUASI = True
+USE_QUASI = False
 USE_EXIT_BOUND = True
 
 
@@ -240,7 +240,7 @@ def kernel_stage_1(
             spread,
         )
         position_value = np.where(
-            position_high_value > tp_array, tp_array, position_value
+            position_high_value >= tp_array, tp_array, position_value
         )
 
     if stop_loss_conf > 0:
@@ -270,7 +270,7 @@ def kernel_stage_1(
             spread,
         )
         position_value = np.where(
-            position_low_value < sl_array, sl_array, position_value
+            position_low_value <= sl_array, sl_array, position_value
         )
 
     if erase:
