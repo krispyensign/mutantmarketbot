@@ -341,7 +341,7 @@ def kernel(
         should_roll,
         config.edge == EdgeCategory.Quasi,
         digits,
-        df["ask_close"] - df["bid_close"],
+        (df["ask_close"] - df["bid_close"]).to_numpy(),
     )
 
     return df
